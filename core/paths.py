@@ -3,6 +3,7 @@ paths.py - Antigravity, Claude Code ve OpenAI Codex dizinleri, dosya yolları ve
 """
 
 import os
+import sys
 import json
 import sqlite3
 import subprocess
@@ -10,9 +11,50 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 
+def get_app_base_dir() -> Path:
+    """EXE olarak paketlendiğinde çalıştırılabilir dosyanın dizinini, aksi halde proje kökünü döndürür."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent
+    return Path(__file__).resolve().parent.parent
+
+
 def get_user_home() -> Path:
     """Kullanıcının ana dizinini döndürür."""
     return Path.home()
+
+
+_CUSTOM_AGENT_DIRS: Dict[str, Optional[Path]] = {
+    "antigravity": None,
+    "claude": None,
+    "codex": None,
+}
+
+_DEFAULT_FOLDER_NAMES = {
+    "antigravity": ".gemini",
+    "claude": ".claude",
+    "codex": ".codex",
+}
+
+
+def get_default_agent_dir(agent: str) -> Path:
+    """Ajan için varsayılan kök klasör yolunu döndürür (.gemini, .claude, .codex)."""
+    folder = _DEFAULT_FOLDER_NAMES.get(agent, f".{agent}")
+    return get_user_home() / folder
+
+
+def set_custom_agent_dirs(custom_dirs: Optional[Dict[str, Optional[str]]]) -> None:
+    """Kullanıcının manuel seçtiği ajan kök klasörlerini uygular."""
+    for key in _CUSTOM_AGENT_DIRS:
+        val = (custom_dirs or {}).get(key)
+        if isinstance(val, str) and val.strip():
+            _CUSTOM_AGENT_DIRS[key] = Path(val.strip()).expanduser()
+        else:
+            _CUSTOM_AGENT_DIRS[key] = None
+
+
+def get_custom_agent_dirs() -> Dict[str, Optional[str]]:
+    """Aktif manuel klasör ayarlarını sözlük olarak döndürür."""
+    return {k: (str(v) if v is not None else None) for k, v in _CUSTOM_AGENT_DIRS.items()}
 
 
 # ==========================================
@@ -20,8 +62,8 @@ def get_user_home() -> Path:
 # ==========================================
 
 def get_gemini_dir() -> Path:
-    """C:\\Users\\<USER>\\.gemini dizinini döndürür."""
-    return get_user_home() / ".gemini"
+    """C:\\Users\\<USER>\\.gemini (veya özel seçilen) dizinini döndürür."""
+    return _CUSTOM_AGENT_DIRS["antigravity"] or get_default_agent_dir("antigravity")
 
 
 def get_antigravity_dir() -> Path:
@@ -122,8 +164,8 @@ def close_antigravity_processes() -> bool:
 # ==========================================
 
 def get_claude_dir() -> Path:
-    """C:\\Users\\<USER>\\.claude dizinini döndürür."""
-    return get_user_home() / ".claude"
+    """C:\\Users\\<USER>\\.claude (veya özel seçilen) dizinini döndürür."""
+    return _CUSTOM_AGENT_DIRS["claude"] or get_default_agent_dir("claude")
 
 
 def get_claude_projects_dir() -> Path:
@@ -204,8 +246,8 @@ def close_claude_processes() -> bool:
 # ==========================================
 
 def get_codex_dir() -> Path:
-    """C:\\Users\\<USER>\\.codex dizinini döndürür."""
-    return get_user_home() / ".codex"
+    """C:\\Users\\<USER>\\.codex (veya özel seçilen) dizinini döndürür."""
+    return _CUSTOM_AGENT_DIRS["codex"] or get_default_agent_dir("codex")
 
 
 def get_codex_sessions_dir() -> Path:

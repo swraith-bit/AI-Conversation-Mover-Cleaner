@@ -52,7 +52,40 @@ It provides **one-click conversation resetting** with automatic safety backups, 
   * Modern English and Turkish interface with persistent preference. Toggle instantly from the top-right corner.
 
 * **🚀 Zero External Dependencies:**
-  * Built entirely on Python standard libraries (`tkinter`, `sqlite3`, `zipfile`, `pathlib`). No `pip install` required!
+  * Built entirely on Python standard libraries (`tkinter`, `sqlite3`, `zipfile`, `zlib`, `pathlib`). No `pip install`, WinRAR, or 7-Zip required!
+
+* **📂 Custom Folder Path Selection & Live Progress:**
+  * Select custom `.gemini`, `.claude`, or `.codex` locations manually per tab if your user folders live elsewhere.
+  * Atomic `.zip` packaging with fast compression, live `%` progress bar, remaining time (ETA), and *"Please wait"* status indicator.
+
+---
+
+## 🛠️ Requirements & Installation
+
+### What is Required?
+* **Portable Mode (`AntigravityManager.exe`):** Nothing! Python, Tkinter, SQLite, and ZIP support are bundled inside the single `.exe`. Just double-click and run.
+* **From Source (`AntigravityManager.bat` / `.py`):**
+  1. **Python 3.10 or newer** (includes `tkinter`, `sqlite3`, and `zipfile` in the standard installation on Windows).
+  2. **No third-party Python packages** (`pip install` is **not** needed).
+  3. **No WinRAR or 7-Zip needed** — `.zip` archives are created and extracted natively via Python.
+  4. **Windows OS** (uses built-in `tasklist` / `taskkill` to safely detect or close running agent processes before import/reset).
+
+### How to Install & Set Up
+* **Option 1 — Portable EXE (Recommended, No Python Required):**
+  Download the repository (or `AntigravityManager.exe`) and double-click **`AntigravityManager.exe`** (or **`AntigravityManager.bat`**, which launches the `.exe` automatically if present).
+* **Option 2 — Run from Python Source:**
+  1. Double-click **`AntigravityManager.bat`**. If Python or Tkinter is missing, the launcher offers to install Python 3.12 (with Tkinter included) automatically via `winget`.
+  2. Or install manually from [python.org/downloads](https://www.python.org/downloads/) (check **"Add python.exe to PATH"** and **"tcl/tk and IDLE"**) or run:
+     ```powershell
+     winget install -e --id Python.Python.3.12
+     ```
+  3. Verify Python & Tkinter:
+     ```powershell
+     python --version
+     python -m tkinter
+     ```
+* **Custom Agent Folders (Optional):**
+  If `.gemini`, `.claude`, or `.codex` is stored in a non-default location on your PC, select the exact `.gemini` / `.claude` / `.codex` folder from the path bar in the app.
 
 ---
 
@@ -174,7 +207,40 @@ Geliştiricilerin oturumlarını **tek tuşla sıfırlama** (otomatik güvenlik 
   * Sağ üst köşedeki dil seçici ile anında İngilizce veya Türkçe'ye geçiş yapılabilir; tercih hatırlanır.
 
 * **🚀 Sıfır Ek Bağımlılık:**
-  * Standart Python 3 kütüphaneleriyle çalışır. Yeni bilgisayarda ek `pip install` gerektirmez.
+  * Tamamen standart Python 3 kütüphaneleriyle (`tkinter`, `sqlite3`, `zipfile`, `zlib`, `pathlib`) çalışır. `pip install`, WinRAR veya 7-Zip gerektirmez!
+
+* **📂 Manuel Klasör Seçimi ve Canlı İlerleme Çubuğu:**
+  * `.gemini`, `.claude` veya `.codex` klasörleri farklı bir dizindeyse her sekmeden manuel olarak seçilebilir.
+  * Atomik ve hızlı `.zip` paketleme, yüzde (`%`) ilerleme çubuğu, tahmini kalan süre (ETA) ve *"Lütfen bekleyin"* durum uyarısı içerir.
+
+---
+
+## 🛠️ Gereksinimler ve Kurulum
+
+### Çalışması İçin Neler Gerekli?
+* **Taşınabilir Mod (`AntigravityManager.exe`):** Hiçbir kurulum gerekmez! Python, Tkinter, SQLite ve ZIP desteği tek `.exe` içine gömülüdür; çift tıklayıp doğrudan çalıştırabilirsiniz.
+* **Kaynak Koddan Çalıştırma (`AntigravityManager.bat` / `.py`):**
+  1. **Python 3.10 veya üzeri** (Windows kurulumunda `tkinter`, `sqlite3` ve `zipfile` standart olarak gelir).
+  2. **Harici Python paketi gerekmez** (`pip install` yapmanıza **gerek yoktur**).
+  3. **WinRAR veya 7-Zip gerekmez** — `.zip` paketleme ve açma işlemleri Python'ın dahili `zipfile` modülü ile yapılır.
+  4. **Windows İşletim Sistemi** (sıfırlama/içe aktarma öncesinde açık ajanları algılayıp kapatmak için Windows'un dahili `tasklist` ve `taskkill` komutlarını kullanır).
+
+### Nasıl Kurulur?
+* **Seçenek 1 — Taşınabilir EXE (Önerilen, Python Kurulumu Gerekmez):**
+  Projeyi (veya `AntigravityManager.exe` dosyasını) indirin ve **`AntigravityManager.exe`** dosyasına çift tıklayın (**`AntigravityManager.bat`** da varsa otomatik olarak `.exe`'yi başlatır).
+* **Seçenek 2 — Python Kaynak Kodundan Çalıştırma:**
+  1. **`AntigravityManager.bat`** dosyasına çift tıklayın. Python veya Tkinter eksikse başlatıcı `winget` üzerinden Python 3.12'yi (Tkinter dahil) otomatik kurmayı teklif eder.
+  2. İsterseniz [python.org/downloads](https://www.python.org/downloads/) üzerinden manuel kurabilir (kurulumda **"Add python.exe to PATH"** ve **"tcl/tk and IDLE"** kutucuklarını işaretleyin) veya terminalden kurabilirsiniz:
+     ```powershell
+     winget install -e --id Python.Python.3.12
+     ```
+  3. Python ve Tkinter doğrulaması:
+     ```powershell
+     python --version
+     python -m tkinter
+     ```
+* **Özel Klasör Konumları (İsteğe Bağlı):**
+  Bilgisayarınızda `.gemini`, `.claude` veya `.codex` klasörleri varsayılan kullanıcı dizininden farklı bir yerdeyse, uygulama içindeki klasör seçme alanından ilgili `.gemini` / `.claude` / `.codex` klasörünü seçebilirsiniz.
 
 ---
 

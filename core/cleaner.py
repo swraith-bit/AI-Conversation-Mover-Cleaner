@@ -7,12 +7,22 @@ import os
 import shutil
 import sqlite3
 import json
+import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Callable, Optional, Tuple
+from typing import Dict, Any, Callable, List, Optional, Tuple
+
+from core.zip_utils import (
+    atomic_zip_write,
+    collect_dir_entries,
+    fs_path,
+    snapshot_sqlite_db,
+    write_entries_to_zip,
+)
 
 from core.paths import (
+    get_app_base_dir,
     get_summaries_db,
     get_proto_summaries,
     get_conversations_dir,
@@ -42,7 +52,7 @@ from core.paths import (
 
 def get_default_backup_dir() -> Path:
     """Yedeklerin saklanacağı varsayılan dizini döndürür."""
-    base = Path(__file__).resolve().parent.parent / "backups"
+    base = get_app_base_dir() / "backups"
     base.mkdir(parents=True, exist_ok=True)
     return base
 
@@ -51,7 +61,11 @@ def get_default_backup_dir() -> Path:
 # 1. ANTIGRAVITY TEMİZLEME & GERİ YÜKLEME
 # ==============================================================================
 
-def create_safety_backup(backup_path: Optional[Path] = None, log: Optional[Callable[[str], None]] = None) -> Path:
+def create_safety_backup(
+    backup_path: Optional[Path] = None,
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> Path:
     """Sıfırlama öncesinde tüm Antigravity sohbet, proje ve yapılandırmalarını yedekler."""
     def _log(msg: str):
         if log:
@@ -63,55 +77,64 @@ def create_safety_backup(backup_path: Optional[Path] = None, log: Optional[Calla
 
     _log(f"🛡️ Antigravity güvenlik yedeği oluşturuluyor: {backup_path.name}")
 
-    with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
+    with tempfile.TemporaryDirectory(prefix="agm_agy_bak_") as snap_dir_str:
+        snap_dir = Path(snap_dir_str)
+        entries: List[Tuple[Path, str, int]] = []
+
         sum_db = get_summaries_db()
         if sum_db.exists():
-            zf.write(sum_db, arcname="antigravity/conversation_summaries.db")
+            snap_db = snapshot_sqlite_db(sum_db, snap_dir)
+            entries.append((snap_db, "antigravity/conversation_summaries.db", snap_db.stat().st_size))
 
         proto = get_proto_summaries()
-        if proto.exists():
-            zf.write(proto, arcname="antigravity/agyhub_summaries_proto.pb")
+        if proto.exists() and proto.is_file():
+            entries.append((proto, "antigravity/agyhub_summaries_proto.pb", proto.stat().st_size))
 
         convos_dir = get_conversations_dir()
         if convos_dir.exists():
             for f in convos_dir.glob("*"):
                 if f.is_file():
-                    zf.write(f, arcname=f"antigravity/conversations/{f.name}")
+                    entries.append((f, f"antigravity/conversations/{f.name}", f.stat().st_size))
 
         brain_dir = get_brain_dir()
         if brain_dir.exists():
-            for root, _, files in os.walk(brain_dir):
-                for file in files:
-                    full_p = Path(root) / file
-                    rel_p = full_p.relative_to(brain_dir)
-                    zf.write(full_p, arcname=f"antigravity/brain/{rel_p.as_posix()}")
+            entries.extend(collect_dir_entries(brain_dir, "antigravity/brain"))
 
         prj_dir = get_config_projects_dir()
         if prj_dir.exists():
             for f in prj_dir.glob("*.json"):
-                zf.write(f, arcname=f"config/projects/{f.name}")
+                if f.is_file():
+                    entries.append((f, f"config/projects/{f.name}", f.stat().st_size))
 
         p_json = get_projects_json()
-        if p_json.exists():
-            zf.write(p_json, arcname="projects.json")
+        if p_json.exists() and p_json.is_file():
+            entries.append((p_json, "projects.json", p_json.stat().st_size))
 
         app_st = get_app_storage_json()
-        if app_st.exists():
-            zf.write(app_st, arcname="app_storage.json")
+        if app_st.exists() and app_st.is_file():
+            entries.append((app_st, "app_storage.json", app_st.stat().st_size))
 
-        manifest = {
-            "agent": "antigravity",
-            "backup_type": "safety_backup",
-            "created_at": datetime.now().isoformat(),
-            "source_user_home": str(get_user_home())
-        }
-        zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+        def _write(zf: zipfile.ZipFile):
+            write_entries_to_zip(zf, entries, progress_callback=progress_callback, log=log)
+            manifest = {
+                "agent": "antigravity",
+                "backup_type": "safety_backup",
+                "created_at": datetime.now().isoformat(),
+                "source_user_home": str(get_user_home())
+            }
+            zf.writestr("manifest.json", json.dumps(manifest, indent=2))
+
+        atomic_zip_write(backup_path, _write)
 
     _log("✅ Antigravity güvenlik yedeği başarıyla alındı.")
     return backup_path
 
 
-def restore_backup(zip_path: Path, log: Optional[Callable[[str], None]] = None) -> Tuple[bool, str]:
+def restore_backup(
+    zip_path: Path,
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> Tuple[bool, str]:
     """Antigravity güvenlik yedeğini geri yükler (Undo)."""
     def _log(msg: str):
         if log:
@@ -128,10 +151,10 @@ def restore_backup(zip_path: Path, log: Optional[Callable[[str], None]] = None) 
 
     try:
         with zipfile.ZipFile(zip_path, "r") as zf:
-            for member in zf.infolist():
-                if member.is_dir() or member.filename == "manifest.json":
-                    continue
-
+            members = [m for m in zf.infolist() if not m.is_dir() and m.filename != "manifest.json"]
+            total_bytes = sum(m.file_size for m in members) or 1
+            done_bytes = 0
+            for member in members:
                 target_path = None
                 fn = member.filename
 
@@ -147,9 +170,12 @@ def restore_backup(zip_path: Path, log: Optional[Callable[[str], None]] = None) 
                     target_path = get_app_storage_json()
 
                 if target_path:
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
-                    with zf.open(member) as src, open(target_path, "wb") as dst:
+                    os.makedirs(fs_path(target_path.parent), exist_ok=True)
+                    with zf.open(member) as src, open(fs_path(target_path), "wb") as dst:
                         shutil.copyfileobj(src, dst)
+                done_bytes += member.file_size
+                if progress_callback:
+                    progress_callback(done_bytes, total_bytes)
 
         _log("✅ Antigravity yedeği başarıyla geri yüklendi!")
         return True, "Antigravity yedeği başarıyla geri yüklendi."
@@ -162,7 +188,8 @@ def restore_backup(zip_path: Path, log: Optional[Callable[[str], None]] = None) 
 def clean_all_conversations_and_projects(
     take_backup: bool = True,
     force_close: bool = True,
-    log: Optional[Callable[[str], None]] = None
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> Tuple[bool, str]:
     """Antigravity sohbet ve projelerini tek hamlede sıfırlar."""
     def _log(msg: str):
@@ -178,7 +205,7 @@ def clean_all_conversations_and_projects(
 
     if take_backup:
         try:
-            backup_file = create_safety_backup(log=log)
+            backup_file = create_safety_backup(log=log, progress_callback=progress_callback)
             _log(f"📁 Güvenlik yedeği kaydedildi: {backup_file.name}")
         except Exception as e:
             _log(f"⚠️ Güvenlik yedeği alınırken hata: {e}")
@@ -314,7 +341,11 @@ def clean_all_conversations_and_projects(
 # 2. CLAUDE CODE & DESKTOP TEMİZLEME & GERİ YÜKLEME
 # ==============================================================================
 
-def create_claude_safety_backup(backup_path: Optional[Path] = None, log: Optional[Callable[[str], None]] = None) -> Path:
+def create_claude_safety_backup(
+    backup_path: Optional[Path] = None,
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> Path:
     """Claude Code sohbet oturumlarını, geçmişini ve ayarlarını yedekler."""
     def _log(msg: str):
         if log:
@@ -327,26 +358,22 @@ def create_claude_safety_backup(backup_path: Optional[Path] = None, log: Optiona
     _log(f"🛡️ Claude güvenlik yedeği oluşturuluyor: {backup_path.name}")
 
     claude_dir = get_claude_dir()
-    with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        # 1. projects/
-        p_dir = get_claude_projects_dir()
-        if p_dir.exists():
-            for root, _, files in os.walk(p_dir):
-                for f in files:
-                    full_p = Path(root) / f
-                    rel_p = full_p.relative_to(claude_dir)
-                    zf.write(full_p, arcname=f"claude/{rel_p.as_posix()}")
+    entries: List[Tuple[Path, str, int]] = []
 
-        # 2. history.jsonl
-        h_file = get_claude_history_file()
-        if h_file.exists():
-            zf.write(h_file, arcname="claude/history.jsonl")
+    p_dir = get_claude_projects_dir()
+    if p_dir.exists():
+        entries.extend(collect_dir_entries(p_dir, "claude", base_dir=claude_dir))
 
-        # 3. settings.json
-        s_file = get_claude_settings_file()
-        if s_file.exists():
-            zf.write(s_file, arcname="claude/settings.json")
+    h_file = get_claude_history_file()
+    if h_file.exists() and h_file.is_file():
+        entries.append((h_file, "claude/history.jsonl", h_file.stat().st_size))
 
+    s_file = get_claude_settings_file()
+    if s_file.exists() and s_file.is_file():
+        entries.append((s_file, "claude/settings.json", s_file.stat().st_size))
+
+    def _write(zf: zipfile.ZipFile):
+        write_entries_to_zip(zf, entries, progress_callback=progress_callback, log=log)
         manifest = {
             "agent": "claude",
             "backup_type": "safety_backup",
@@ -355,11 +382,17 @@ def create_claude_safety_backup(backup_path: Optional[Path] = None, log: Optiona
         }
         zf.writestr("manifest.json", json.dumps(manifest, indent=2))
 
+    atomic_zip_write(backup_path, _write)
+
     _log("✅ Claude güvenlik yedeği başarıyla alındı.")
     return backup_path
 
 
-def restore_claude_backup(zip_path: Path, log: Optional[Callable[[str], None]] = None) -> Tuple[bool, str]:
+def restore_claude_backup(
+    zip_path: Path,
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> Tuple[bool, str]:
     """Claude güvenlik yedeğini geri yükler."""
     def _log(msg: str):
         if log:
@@ -377,15 +410,19 @@ def restore_claude_backup(zip_path: Path, log: Optional[Callable[[str], None]] =
     claude_dir = get_claude_dir()
     try:
         with zipfile.ZipFile(zip_path, "r") as zf:
-            for member in zf.infolist():
-                if member.is_dir() or member.filename == "manifest.json":
-                    continue
+            members = [m for m in zf.infolist() if not m.is_dir() and m.filename != "manifest.json"]
+            total_bytes = sum(m.file_size for m in members) or 1
+            done_bytes = 0
+            for member in members:
                 if member.filename.startswith("claude/"):
                     sub = member.filename[len("claude/"):]
                     target_path = claude_dir / sub
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
-                    with zf.open(member) as src, open(target_path, "wb") as dst:
+                    os.makedirs(fs_path(target_path.parent), exist_ok=True)
+                    with zf.open(member) as src, open(fs_path(target_path), "wb") as dst:
                         shutil.copyfileobj(src, dst)
+                done_bytes += member.file_size
+                if progress_callback:
+                    progress_callback(done_bytes, total_bytes)
 
         _log("✅ Claude yedeği başarıyla geri yüklendi!")
         return True, "Claude yedeği başarıyla geri yüklendi."
@@ -398,7 +435,8 @@ def restore_claude_backup(zip_path: Path, log: Optional[Callable[[str], None]] =
 def clean_claude_conversations(
     take_backup: bool = True,
     force_close: bool = True,
-    log: Optional[Callable[[str], None]] = None
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> Tuple[bool, str]:
     """Claude Code sohbet oturumlarını ve terminal geçmişini sıfırlar."""
     def _log(msg: str):
@@ -414,7 +452,7 @@ def clean_claude_conversations(
 
     if take_backup:
         try:
-            bf = create_claude_safety_backup(log=log)
+            bf = create_claude_safety_backup(log=log, progress_callback=progress_callback)
             _log(f"📁 Güvenlik yedeği kaydedildi: {bf.name}")
         except Exception as e:
             _log(f"⚠️ Claude güvenlik yedeği hatası: {e}")
@@ -453,7 +491,11 @@ def clean_claude_conversations(
 # 3. OPENAI CODEX TEMİZLEME & GERİ YÜKLEME
 # ==============================================================================
 
-def create_codex_safety_backup(backup_path: Optional[Path] = None, log: Optional[Callable[[str], None]] = None) -> Path:
+def create_codex_safety_backup(
+    backup_path: Optional[Path] = None,
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> Path:
     """OpenAI Codex oturumlarını ve geçmişini yedekler."""
     def _log(msg: str):
         if log:
@@ -466,27 +508,22 @@ def create_codex_safety_backup(backup_path: Optional[Path] = None, log: Optional
     _log(f"🛡️ Codex güvenlik yedeği oluşturuluyor: {backup_path.name}")
 
     codex_dir = get_codex_dir()
-    with zipfile.ZipFile(backup_path, "w", zipfile.ZIP_DEFLATED) as zf:
-        s_dir = get_codex_sessions_dir()
-        if s_dir.exists():
-            for root, _, files in os.walk(s_dir):
-                for f in files:
-                    full_p = Path(root) / f
-                    rel_p = full_p.relative_to(codex_dir)
-                    zf.write(full_p, arcname=f"codex/{rel_p.as_posix()}")
+    entries: List[Tuple[Path, str, int]] = []
 
-        h_dir = get_codex_history_dir()
-        if h_dir.exists():
-            for root, _, files in os.walk(h_dir):
-                for f in files:
-                    full_p = Path(root) / f
-                    rel_p = full_p.relative_to(codex_dir)
-                    zf.write(full_p, arcname=f"codex/{rel_p.as_posix()}")
+    s_dir = get_codex_sessions_dir()
+    if s_dir.exists():
+        entries.extend(collect_dir_entries(s_dir, "codex", base_dir=codex_dir))
 
-        cfg = get_codex_config_file()
-        if cfg.exists():
-            zf.write(cfg, arcname="codex/config.toml")
+    h_dir = get_codex_history_dir()
+    if h_dir.exists():
+        entries.extend(collect_dir_entries(h_dir, "codex", base_dir=codex_dir))
 
+    cfg = get_codex_config_file()
+    if cfg.exists() and cfg.is_file():
+        entries.append((cfg, "codex/config.toml", cfg.stat().st_size))
+
+    def _write(zf: zipfile.ZipFile):
+        write_entries_to_zip(zf, entries, progress_callback=progress_callback, log=log)
         manifest = {
             "agent": "codex",
             "backup_type": "safety_backup",
@@ -495,11 +532,17 @@ def create_codex_safety_backup(backup_path: Optional[Path] = None, log: Optional
         }
         zf.writestr("manifest.json", json.dumps(manifest, indent=2))
 
+    atomic_zip_write(backup_path, _write)
+
     _log("✅ Codex güvenlik yedeği başarıyla alındı.")
     return backup_path
 
 
-def restore_codex_backup(zip_path: Path, log: Optional[Callable[[str], None]] = None) -> Tuple[bool, str]:
+def restore_codex_backup(
+    zip_path: Path,
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
+) -> Tuple[bool, str]:
     """OpenAI Codex yedeğini geri yükler."""
     def _log(msg: str):
         if log:
@@ -517,15 +560,19 @@ def restore_codex_backup(zip_path: Path, log: Optional[Callable[[str], None]] = 
     codex_dir = get_codex_dir()
     try:
         with zipfile.ZipFile(zip_path, "r") as zf:
-            for member in zf.infolist():
-                if member.is_dir() or member.filename == "manifest.json":
-                    continue
+            members = [m for m in zf.infolist() if not m.is_dir() and m.filename != "manifest.json"]
+            total_bytes = sum(m.file_size for m in members) or 1
+            done_bytes = 0
+            for member in members:
                 if member.filename.startswith("codex/"):
                     sub = member.filename[len("codex/"):]
                     target_path = codex_dir / sub
-                    target_path.parent.mkdir(parents=True, exist_ok=True)
-                    with zf.open(member) as src, open(target_path, "wb") as dst:
+                    os.makedirs(fs_path(target_path.parent), exist_ok=True)
+                    with zf.open(member) as src, open(fs_path(target_path), "wb") as dst:
                         shutil.copyfileobj(src, dst)
+                done_bytes += member.file_size
+                if progress_callback:
+                    progress_callback(done_bytes, total_bytes)
 
         _log("✅ Codex yedeği başarıyla geri yüklendi!")
         return True, "Codex yedeği başarıyla geri yüklendi."
@@ -538,7 +585,8 @@ def restore_codex_backup(zip_path: Path, log: Optional[Callable[[str], None]] = 
 def clean_codex_conversations(
     take_backup: bool = True,
     force_close: bool = True,
-    log: Optional[Callable[[str], None]] = None
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> Tuple[bool, str]:
     """OpenAI Codex sohbet oturumlarını ve komut geçmişini sıfırlar."""
     def _log(msg: str):
@@ -554,7 +602,7 @@ def clean_codex_conversations(
 
     if take_backup:
         try:
-            bf = create_codex_safety_backup(log=log)
+            bf = create_codex_safety_backup(log=log, progress_callback=progress_callback)
             _log(f"📁 Güvenlik yedeği kaydedildi: {bf.name}")
         except Exception as e:
             _log(f"⚠️ Codex güvenlik yedeği hatası: {e}")
@@ -597,7 +645,8 @@ def clean_codex_conversations(
 def clean_all_agents(
     take_backup: bool = True,
     force_close: bool = True,
-    log: Optional[Callable[[str], None]] = None
+    log: Optional[Callable[[str], None]] = None,
+    progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> Tuple[bool, str]:
     """Antigravity, Claude ve Codex'i tek seferde sıfırlar."""
     def _log(msg: str):
@@ -605,9 +654,17 @@ def clean_all_agents(
             log(msg)
 
     _log("⚡ TÜM ARAÇLAR (Antigravity, Claude, Codex) SIFIRLANIYOR...")
-    s1, m1 = clean_all_conversations_and_projects(take_backup=take_backup, force_close=force_close, log=log)
-    s2, m2 = clean_claude_conversations(take_backup=take_backup, force_close=force_close, log=log)
-    s3, m3 = clean_codex_conversations(take_backup=take_backup, force_close=force_close, log=log)
+    def _sub_cb(idx: int):
+        if not progress_callback:
+            return None
+        def _cb(done: int, total: int):
+            r = min(1.0, done / max(total, 1))
+            progress_callback(int((idx + r) * 100 / 3), 100)
+        return _cb
+
+    s1, m1 = clean_all_conversations_and_projects(take_backup=take_backup, force_close=force_close, log=log, progress_callback=_sub_cb(0))
+    s2, m2 = clean_claude_conversations(take_backup=take_backup, force_close=force_close, log=log, progress_callback=_sub_cb(1))
+    s3, m3 = clean_codex_conversations(take_backup=take_backup, force_close=force_close, log=log, progress_callback=_sub_cb(2))
 
     all_success = s1 and s2 and s3
     msg = "Tüm araçların sohbet ve oturumları başarıyla temizlendi." if all_success else "Bazı araçlar temizlenirken uyarılar oluştu."

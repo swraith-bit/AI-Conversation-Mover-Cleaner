@@ -9,6 +9,7 @@ Multi-language support: English (default) & Turkish.
 import os
 import sys
 import json
+import time
 import argparse
 import threading
 from datetime import datetime
@@ -18,6 +19,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from core.paths import (
+    get_app_base_dir,
     get_system_stats,
     get_claude_stats,
     get_codex_stats,
@@ -28,7 +30,12 @@ from core.paths import (
     close_claude_processes,
     is_codex_running,
     close_codex_processes,
-    get_user_home
+    get_user_home,
+    get_default_agent_dir,
+    set_custom_agent_dirs,
+    get_gemini_dir,
+    get_claude_dir,
+    get_codex_dir,
 )
 from core.cleaner import (
     clean_all_conversations_and_projects,
@@ -61,7 +68,7 @@ from core.skills_migrator import (
     import_all_agents_skills
 )
 
-CONFIG_PATH = Path(__file__).resolve().parent / "config.json"
+CONFIG_PATH = get_app_base_dir() / "config.json"
 
 
 def load_config() -> dict:
@@ -152,37 +159,64 @@ TRANSLATIONS = {
         "log_init_2": "Antigravity, Claude Code, and OpenAI Codex are supported.",
         "log_mode_switched": "Active agent switched: {icon} {name}",
         "log_lang_switched": "Language changed to English.",
+        # Progress & Wait Status
+        "progress_ready": "● Ready",
+        "progress_running": "⏳ {op} — Please wait, do not close the app...",
+        "progress_done": "✅ Completed (100%)",
+        "progress_error": "❌ Operation failed",
+        "progress_eta_calc": "Calculating...",
+        "progress_eta_fmt": "{pct}% • ~{eta} left",
+        "progress_log_fmt": "⏳ Progress: {pct}% • Remaining: ~{eta} (Please wait...)",
+        "op_export_chats": "Exporting chats",
+        "op_import_chats": "Importing chats",
+        "op_export_skills": "Exporting skills",
+        "op_import_skills": "Importing skills",
+        "op_clean": "Resetting chats",
+        "op_undo": "Restoring backup",
+        "busy_close_title": "Operation in Progress",
+        "busy_close_msg": "An operation is currently running. Please wait until it finishes so your backup is not corrupted.",
+        # Custom Folder Path Selector
+        "path_label_fmt": "📂 {folder} Folder (Select the '{folder}' directory):",
+        "path_hint_fmt": "Expected: {folder}  (e.g. {default})",
+        "path_all_summary_fmt": "📂 Active Folders — .gemini: {agy}  |  .claude: {cl}  |  .codex: {cdx}  (Configure in each agent tab)",
+        "btn_browse": "📁 Browse...",
+        "btn_apply_path": "✓ Apply",
+        "btn_reset_path": "↺ Default",
+        "path_dialog_title": "Select '{folder}' Folder",
+        "path_updated_log": "📁 {agent} ({folder}) folder set to: {path}",
+        "path_reset_log": "📁 {agent} ({folder}) folder reset to default: {path}",
+        "path_not_found_warn": "⚠️ Selected folder does not exist yet (will be used on import): {path}",
         # Dialogs / Popups
         "dialog_success": "Success",
         "dialog_error": "Error",
         "clean_confirm_title": "{agent} Reset Confirmation",
         "clean_confirm_msg": "WARNING!\n\nALL chats and sessions on {agent} will be wiped.\n(An automatic safety backup will be created before wiping).\n\nDo you want to proceed?",
-        "clean_log_start": "⏳ {agent} reset process started...",
+        "clean_log_start": "⏳ {agent} reset process started... Please wait...",
         "clean_success": "{agent} chats and sessions were cleaned successfully!",
         "clean_error": "Reset failed: {msg}",
         "undo_no_backup_title": "No Backup Found",
         "undo_no_backup_msg": "No automatic safety backup found for {agent}.",
         "undo_confirm_title": "Restore from Safety Backup (Undo)",
         "undo_confirm_msg": "Restore latest safety backup?\n\nFile: {file}\nDate: {date}\n\nThis will roll back your current chats to this snapshot.",
-        "undo_log_start": "⏳ Restoring backup: {file}",
+        "undo_log_start": "⏳ Restoring backup: {file} — Please wait...",
         "undo_success": "Backup restored successfully!",
         "undo_error": "Restore failed: {msg}",
         "export_chats_dialog": "Save {agent} Chats (.zip)",
-        "export_chats_log_start": "⏳ Exporting {agent} chats...",
+        "export_chats_log_start": "⏳ Exporting {agent} chats... Please wait...",
         "export_chats_success": "{agent} chats exported successfully:\n{file}",
         "export_chats_error": "Export failed: {msg}",
         "import_chats_dialog": "Select {agent} Backup to Import (.zip)",
         "import_chats_mode_title": "Import Mode",
         "import_chats_mode_msg": "How would you like to restore {agent} backup?\n\n• [YES] = CLEAN REPLACE: Wipes current chats and restores this backup only.\n• [NO] = MERGE: Keeps current chats and merges backup chats alongside them.\n• [CANCEL] = Cancel operation.",
-        "import_chats_log_start": "⏳ Importing {agent} chats (Mode: {mode})...",
+        "import_chats_log_start": "⏳ Importing {agent} chats (Mode: {mode})... Please wait...",
         "import_chats_success": "{agent} chats imported successfully!\nYou can now start the application.",
         "import_chats_error": "Import failed: {msg}",
         "export_skills_dialog": "Save {agent} Skills Package (.zip)",
-        "export_skills_log_start": "⏳ Exporting {agent} skills...",
+        "export_skills_log_start": "⏳ Exporting {agent} skills... Please wait...",
         "export_skills_success": "{agent} skills packaged successfully:\n{file}",
         "export_skills_error": "Skills export failed: {msg}",
         "import_skills_dialog": "Select {agent} Skills Package to Import (.zip)",
-        "import_skills_log_start": "⏳ Installing {agent} skills...",
+        "import_skills_log_start": "⏳ Installing {agent} skills... Please wait...",
         "import_skills_success": "{agent} skills installed successfully!",
         "import_skills_error": "Skills installation failed: {msg}",
         # CLI
@@ -275,37 +309,64 @@ TRANSLATIONS = {
         "log_init_2": "Antigravity, Claude Code ve OpenAI Codex desteklenmektedir.",
         "log_mode_switched": "Mod değiştirildi: {icon} {name}",
         "log_lang_switched": "Dil Türkçe olarak değiştirildi.",
+        # Progress & Wait Status
+        "progress_ready": "● Hazır",
+        "progress_running": "⏳ {op} — Lütfen bekleyin, uygulamayı kapatmayın...",
+        "progress_done": "✅ Tamamlandı (%100)",
+        "progress_error": "❌ İşlem başarısız",
+        "progress_eta_calc": "Hesaplanıyor...",
+        "progress_eta_fmt": "%{pct} • ~{eta} kaldı",
+        "progress_log_fmt": "⏳ İlerleme: %{pct} • Kalan süre: ~{eta} (Lütfen bekleyin...)",
+        "op_export_chats": "Sohbetler dışa aktarılıyor",
+        "op_import_chats": "Sohbetler içe aktarılıyor",
+        "op_export_skills": "Skills dışa aktarılıyor",
+        "op_import_skills": "Skills kuruluyor",
+        "op_clean": "Sohbetler sıfırlanıyor",
+        "op_undo": "Yedek geri yükleniyor",
+        "busy_close_title": "İşlem Devam Ediyor",
+        "busy_close_msg": "Şu anda bir işlem devam ediyor. Yedek dosyasının bozulmaması için lütfen işlem bitene kadar bekleyin.",
+        # Custom Folder Path Selector
+        "path_label_fmt": "📂 {folder} Klasörü ('{folder}' klasörünü seçin):",
+        "path_hint_fmt": "Gösterilecek klasör: {folder}  (örn: {default})",
+        "path_all_summary_fmt": "📂 Aktif Klasörler — .gemini: {agy}  |  .claude: {cl}  |  .codex: {cdx}  (Her araç sekmesinden değiştirilebilir)",
+        "btn_browse": "📁 Klasör Seç...",
+        "btn_apply_path": "✓ Uygula",
+        "btn_reset_path": "↺ Varsayılan",
+        "path_dialog_title": "'{folder}' Klasörünü Seçin",
+        "path_updated_log": "📁 {agent} ({folder}) klasörü ayarlandı: {path}",
+        "path_reset_log": "📁 {agent} ({folder}) klasörü varsayılana sıfırlandı: {path}",
+        "path_not_found_warn": "⚠️ Seçilen klasör henüz mevcut değil (içe aktarmada kullanılacak): {path}",
         # Dialogs / Popups
         "dialog_success": "Başarılı",
         "dialog_error": "Hata",
         "clean_confirm_title": "{agent} Sıfırlama Onayı",
         "clean_confirm_msg": "DİKKAT!\n\n{agent} üzerindeki TÜM sohbetler ve oturumlar silinecektir.\n(Silme öncesinde otomatik güvenlik yedeği alınacaktır).\n\nDevam etmek istiyor musunuz?",
-        "clean_log_start": "⏳ {agent} sıfırlama işlemi başlatıldı...",
+        "clean_log_start": "⏳ {agent} sıfırlama işlemi başlatıldı... Lütfen bekleyin...",
         "clean_success": "{agent} sohbet ve oturumları başarıyla temizlendi!",
         "clean_error": "Sıfırlama başarısız: {msg}",
         "undo_no_backup_title": "Yedek Bulunamadı",
         "undo_no_backup_msg": "{agent} için otomatik alınmış bir güvenlik yedeği bulunamadı.",
         "undo_confirm_title": "Yedekten Geri Alma (Undo)",
         "undo_confirm_msg": "En son güvenlik yedeği geri yüklensin mi?\n\nDosya: {file}\nTarih: {date}\n\nBu işlem mevcut sohbetleri bu yedeğe geri döndürür.",
-        "undo_log_start": "⏳ Yedek geri yükleniyor: {file}",
+        "undo_log_start": "⏳ Yedek geri yükleniyor: {file} — Lütfen bekleyin...",
         "undo_success": "Yedek başarıyla geri yüklendi!",
         "undo_error": "Geri alma başarısız: {msg}",
         "export_chats_dialog": "{agent} Sohbetlerini Kaydet (.zip)",
-        "export_chats_log_start": "⏳ {agent} sohbetleri dışa aktarılıyor...",
+        "export_chats_log_start": "⏳ {agent} sohbetleri dışa aktarılıyor... Lütfen bekleyin...",
         "export_chats_success": "{agent} sohbetleri başarıyla dışa aktarıldı:\n{file}",
         "export_chats_error": "Dışa aktarma başarısız: {msg}",
         "import_chats_dialog": "İçe Aktarılacak {agent} Yedeğini Seçin (.zip)",
         "import_chats_mode_title": "İçe Aktarma Modu",
         "import_chats_mode_msg": "{agent} yedek içeriği nasıl yüklensin?\n\n• [EVET] = TEMİZ KURULUM: Mevcut sohbetleri temizler ve sadece bu yedeği yükler.\n• [HAYIR] = BİRLEŞTİRME (Merge): Mevcut sohbetleri korur, paketteki sohbetleri onların üzerine ekler.\n• [İPTAL] = İşlemi iptal et.",
-        "import_chats_log_start": "⏳ {agent} sohbetleri içe aktarılıyor (Mod: {mode})...",
+        "import_chats_log_start": "⏳ {agent} sohbetleri içe aktarılıyor (Mod: {mode})... Lütfen bekleyin...",
         "import_chats_success": "{agent} sohbetleri başarıyla aktarıldı!\nUygulamayı başlatabilirsiniz.",
         "import_chats_error": "İçe aktarma başarısız: {msg}",
         "export_skills_dialog": "{agent} Skills Paketini Kaydet (.zip)",
-        "export_skills_log_start": "⏳ {agent} skills dışa aktarılıyor...",
+        "export_skills_log_start": "⏳ {agent} skills dışa aktarılıyor... Lütfen bekleyin...",
         "export_skills_success": "{agent} skills başarıyla paketlendi:\n{file}",
         "export_skills_error": "Skills dışa aktarılamadı: {msg}",
         "import_skills_dialog": "İçe Aktarılacak {agent} Skills Paketini Seçin (.zip)",
-        "import_skills_log_start": "⏳ {agent} skills kuruluyor...",
+        "import_skills_log_start": "⏳ {agent} skills kuruluyor... Lütfen bekleyin...",
         "import_skills_success": "{agent} skills başarıyla kuruldu!",
         "import_skills_error": "Skills kurulamadı: {msg}",
         # CLI
@@ -353,6 +414,25 @@ def run_cli(args: argparse.Namespace):
     def cli_log(msg: str):
         print(f"[{datetime.now().strftime('%H:%M:%S')}] {msg}")
 
+    def make_cli_progress():
+        state = {"start": time.monotonic(), "last_log": 0.0, "last_pct": -1}
+        def _cb(done: int, total: int):
+            if total <= 0:
+                return
+            pct = int(min(100, max(0, (done / total) * 100)))
+            now = time.monotonic()
+            if pct != state["last_pct"] and (now - state["last_log"] >= 5.0 or (pct == 100 and state["last_pct"] < 100)):
+                elapsed = now - state["start"]
+                if done > 0 and elapsed >= 0.5 and pct < 100:
+                    rem = max(0, int(elapsed * (total - done) / done))
+                    eta = f"{rem}s" if rem < 60 else f"{rem // 60}m {rem % 60:02d}s"
+                else:
+                    eta = "0s" if pct >= 100 else t["progress_eta_calc"]
+                cli_log(t["progress_log_fmt"].format(pct=pct, eta=eta))
+                state["last_log"] = now
+                state["last_pct"] = pct
+        return _cb
+
     yes_no = lambda b: t["cli_yes"] if b else t["cli_no"]
 
     if args.status:
@@ -396,14 +476,15 @@ def run_cli(args: argparse.Namespace):
 
     if args.clean:
         cli_log(t["cli_clean_starting"].format(agent=agent.upper()))
+        pcb = make_cli_progress()
         if agent == "antigravity":
-            s, m = clean_all_conversations_and_projects(take_backup=not args.no_backup, force_close=True, log=cli_log)
+            s, m = clean_all_conversations_and_projects(take_backup=not args.no_backup, force_close=True, log=cli_log, progress_callback=pcb)
         elif agent == "claude":
-            s, m = clean_claude_conversations(take_backup=not args.no_backup, force_close=True, log=cli_log)
+            s, m = clean_claude_conversations(take_backup=not args.no_backup, force_close=True, log=cli_log, progress_callback=pcb)
         elif agent == "codex":
-            s, m = clean_codex_conversations(take_backup=not args.no_backup, force_close=True, log=cli_log)
+            s, m = clean_codex_conversations(take_backup=not args.no_backup, force_close=True, log=cli_log, progress_callback=pcb)
         elif agent == "all":
-            s, m = clean_all_agents(take_backup=not args.no_backup, force_close=True, log=cli_log)
+            s, m = clean_all_agents(take_backup=not args.no_backup, force_close=True, log=cli_log, progress_callback=pcb)
         if not s:
             sys.exit(1)
         return
@@ -411,14 +492,15 @@ def run_cli(args: argparse.Namespace):
     if args.export_chats:
         out_p = Path(args.export_chats).resolve()
         cli_log(t["cli_export_chats_starting"].format(agent=agent.upper(), path=out_p))
+        pcb = make_cli_progress()
         if agent == "antigravity":
-            s, m = export_chats_and_projects(out_p, log=cli_log)
+            s, m = export_chats_and_projects(out_p, log=cli_log, progress_callback=pcb)
         elif agent == "claude":
-            s, m = export_claude_chats(out_p, log=cli_log)
+            s, m = export_claude_chats(out_p, log=cli_log, progress_callback=pcb)
         elif agent == "codex":
-            s, m = export_codex_chats(out_p, log=cli_log)
+            s, m = export_codex_chats(out_p, log=cli_log, progress_callback=pcb)
         elif agent == "all":
-            s, m = export_all_agents_chats(out_p, log=cli_log)
+            s, m = export_all_agents_chats(out_p, log=cli_log, progress_callback=pcb)
         if not s:
             sys.exit(1)
         return
@@ -427,14 +509,15 @@ def run_cli(args: argparse.Namespace):
         in_p = Path(args.import_chats).resolve()
         mode = "merge" if args.merge else "replace"
         cli_log(t["cli_import_chats_starting"].format(agent=agent.upper(), mode=mode, path=in_p))
+        pcb = make_cli_progress()
         if agent == "antigravity":
-            s, m = import_chats_and_projects(in_p, mode=mode, remap_paths=not args.no_remap, log=cli_log)
+            s, m = import_chats_and_projects(in_p, mode=mode, remap_paths=not args.no_remap, log=cli_log, progress_callback=pcb)
         elif agent == "claude":
-            s, m = import_claude_chats(in_p, mode=mode, remap_paths=not args.no_remap, log=cli_log)
+            s, m = import_claude_chats(in_p, mode=mode, remap_paths=not args.no_remap, log=cli_log, progress_callback=pcb)
         elif agent == "codex":
-            s, m = import_codex_chats(in_p, mode=mode, remap_paths=not args.no_remap, log=cli_log)
+            s, m = import_codex_chats(in_p, mode=mode, remap_paths=not args.no_remap, log=cli_log, progress_callback=pcb)
         elif agent == "all":
-            s, m = import_all_agents_chats(in_p, mode=mode, remap_paths=not args.no_remap, log=cli_log)
+            s, m = import_all_agents_chats(in_p, mode=mode, remap_paths=not args.no_remap, log=cli_log, progress_callback=pcb)
         if not s:
             sys.exit(1)
         return
@@ -442,14 +525,15 @@ def run_cli(args: argparse.Namespace):
     if args.export_skills:
         out_p = Path(args.export_skills).resolve()
         cli_log(t["cli_export_skills_starting"].format(agent=agent.upper(), path=out_p))
+        pcb = make_cli_progress()
         if agent == "antigravity":
-            s, m = export_skills(out_p, include_plugins=True, include_global_rules=True, log=cli_log)
+            s, m = export_skills(out_p, include_plugins=True, include_global_rules=True, log=cli_log, progress_callback=pcb)
         elif agent == "claude":
-            s, m = export_claude_skills(out_p, log=cli_log)
+            s, m = export_claude_skills(out_p, log=cli_log, progress_callback=pcb)
         elif agent == "codex":
-            s, m = export_codex_skills(out_p, log=cli_log)
+            s, m = export_codex_skills(out_p, log=cli_log, progress_callback=pcb)
         elif agent == "all":
-            s, m = export_all_agents_skills(out_p, log=cli_log)
+            s, m = export_all_agents_skills(out_p, log=cli_log, progress_callback=pcb)
         if not s:
             sys.exit(1)
         return
@@ -457,14 +541,15 @@ def run_cli(args: argparse.Namespace):
     if args.import_skills:
         in_p = Path(args.import_skills).resolve()
         cli_log(t["cli_import_skills_starting"].format(agent=agent.upper(), path=in_p))
+        pcb = make_cli_progress()
         if agent == "antigravity":
-            s, m = import_skills(in_p, log=cli_log)
+            s, m = import_skills(in_p, log=cli_log, progress_callback=pcb)
         elif agent == "claude":
-            s, m = import_claude_skills(in_p, log=cli_log)
+            s, m = import_claude_skills(in_p, log=cli_log, progress_callback=pcb)
         elif agent == "codex":
-            s, m = import_codex_skills(in_p, log=cli_log)
+            s, m = import_codex_skills(in_p, log=cli_log, progress_callback=pcb)
         elif agent == "all":
-            s, m = import_all_agents_skills(in_p, log=cli_log)
+            s, m = import_all_agents_skills(in_p, log=cli_log, progress_callback=pcb)
         if not s:
             sys.exit(1)
         return
@@ -472,12 +557,13 @@ def run_cli(args: argparse.Namespace):
     if args.restore:
         in_p = Path(args.restore).resolve()
         cli_log(t["cli_restore_starting"].format(agent=agent.upper(), path=in_p))
+        pcb = make_cli_progress()
         if agent == "claude":
-            s, m = restore_claude_backup(in_p, log=cli_log)
+            s, m = restore_claude_backup(in_p, log=cli_log, progress_callback=pcb)
         elif agent == "codex":
-            s, m = restore_codex_backup(in_p, log=cli_log)
+            s, m = restore_codex_backup(in_p, log=cli_log, progress_callback=pcb)
         else:
-            s, m = restore_backup(in_p, log=cli_log)
+            s, m = restore_backup(in_p, log=cli_log, progress_callback=pcb)
         if not s:
             sys.exit(1)
         return
@@ -501,8 +587,8 @@ class ModernAgentManagerApp:
                 self.lang = "en"
 
             self.root.title(self.t("app_title"))
-            self.root.geometry("1040x750")
-            self.root.minsize(920, 650)
+            self.root.geometry("1040x800")
+            self.root.minsize(920, 690)
 
             # Modern Dark Theme Color Palette (Dark Slate Obsidian)
             self.BG_MAIN = "#0b0c10"
@@ -561,11 +647,23 @@ class ModernAgentManagerApp:
             self.current_agent = "antigravity"
             self.tab_buttons = {}
             self.latest_stats_data = {}
+            self.is_busy = False
+            self._progress_pct = 0
+            self._progress_state = "ready"
+            self._active_op_key = None
+            set_custom_agent_dirs(self.config.get("custom_paths"))
 
             self.root.configure(bg=self.BG_MAIN)
+            self.root.protocol("WM_DELETE_WINDOW", self._on_close)
             self._build_ui()
             self.switch_agent("antigravity")
             self._update_lang_buttons()
+
+        def _on_close(self):
+            if self.is_busy:
+                messagebox.showwarning(self.t("busy_close_title"), self.t("busy_close_msg"))
+                return
+            self.root.destroy()
 
         def t(self, key: str, **kwargs) -> str:
             """Translates key to current language with formatting."""
@@ -617,9 +715,11 @@ class ModernAgentManagerApp:
             self.log_title.config(text=self.t("log_title"))
             self.btn_clear_log.config(text=self.t("btn_clear_log"))
             self.btn_copy_log.config(text=self.t("btn_copy_log"))
+            self._refresh_progress_texts()
 
             # Update current active agent card texts
             self._apply_agent_card_texts(self.current_agent)
+            self._refresh_path_card()
 
             # Update stats display if we have cached stats
             if self.latest_stats_data:
@@ -814,6 +914,109 @@ class ModernAgentManagerApp:
             self.btn_refresh.grid(row=0, column=6, sticky="e")
             self._add_button_hover(self.btn_refresh, self.BG_CARD_LIGHT, self.BG_CARD_HOVER)
 
+            # 2.5 Manual Folder Path Selector Card
+            self.path_card = tk.Frame(
+                self.root,
+                bg=self.BG_CARD,
+                highlightthickness=1,
+                highlightbackground=self.BORDER_COLOR,
+                padx=14,
+                pady=8
+            )
+            self.path_card.pack(fill=tk.X, padx=16, pady=(0, 6))
+
+            path_top = tk.Frame(self.path_card, bg=self.BG_CARD)
+            path_top.pack(fill=tk.X, pady=(0, 5))
+
+            self.lbl_path_title = tk.Label(
+                path_top,
+                text="",
+                font=("Segoe UI", 8, "bold"),
+                fg=self.FG_MAIN,
+                bg=self.BG_CARD,
+                anchor="w"
+            )
+            self.lbl_path_title.pack(side=tk.LEFT)
+
+            self.lbl_path_hint = tk.Label(
+                path_top,
+                text="",
+                font=("Segoe UI", 8),
+                fg=self.FG_MUTED,
+                bg=self.BG_CARD,
+                anchor="e"
+            )
+            self.lbl_path_hint.pack(side=tk.RIGHT)
+
+            self.path_input_row = tk.Frame(self.path_card, bg=self.BG_CARD)
+            self.path_input_row.pack(fill=tk.X)
+
+            self.var_custom_path = tk.StringVar()
+            self.entry_path = tk.Entry(
+                self.path_input_row,
+                textvariable=self.var_custom_path,
+                font=("Consolas", 9),
+                bg="#08090d",
+                fg=self.FG_MAIN,
+                insertbackground="#38bdf8",
+                relief=tk.FLAT,
+                highlightthickness=1,
+                highlightbackground=self.BORDER_COLOR
+            )
+            self.entry_path.pack(side=tk.LEFT, fill=tk.X, expand=True, ipady=4, padx=(0, 6))
+            self.entry_path.bind("<Return>", lambda e: self._apply_custom_path())
+
+            self.btn_path_apply = tk.Button(
+                self.path_input_row,
+                text=self.t("btn_apply_path"),
+                command=self._apply_custom_path,
+                font=("Segoe UI", 8, "bold"),
+                bg=self.BG_CARD_LIGHT,
+                fg=self.FG_MAIN,
+                activebackground=self.BG_CARD_HOVER,
+                activeforeground="#ffffff",
+                relief=tk.FLAT,
+                cursor="hand2",
+                padx=10,
+                pady=3
+            )
+            self.btn_path_apply.pack(side=tk.LEFT, padx=(0, 4))
+            self._add_button_hover(self.btn_path_apply, self.BG_CARD_LIGHT, self.BG_CARD_HOVER)
+
+            self.btn_path_browse = tk.Button(
+                self.path_input_row,
+                text=self.t("btn_browse"),
+                command=self._browse_custom_path,
+                font=("Segoe UI", 8, "bold"),
+                bg="#1d4ed8",
+                fg="#ffffff",
+                activebackground="#2563eb",
+                activeforeground="#ffffff",
+                relief=tk.FLAT,
+                cursor="hand2",
+                padx=10,
+                pady=3
+            )
+            self.btn_path_browse.pack(side=tk.LEFT, padx=(0, 4))
+            self._add_button_hover(self.btn_path_browse, "#1d4ed8", "#2563eb")
+
+            self.btn_path_reset = tk.Button(
+                self.path_input_row,
+                text=self.t("btn_reset_path"),
+                command=self._reset_custom_path,
+                font=("Segoe UI", 8),
+                bg=self.BG_CARD_LIGHT,
+                fg=self.FG_MUTED,
+                activebackground=self.BG_CARD_HOVER,
+                activeforeground="#ffffff",
+                relief=tk.FLAT,
+                cursor="hand2",
+                padx=8,
+                pady=3
+            )
+            self.btn_path_reset.pack(side=tk.LEFT)
+            self._add_button_hover(self.btn_path_reset, self.BG_CARD_LIGHT, self.BG_CARD_HOVER)
+
             # 3. Main Action Cards Container
             self.actions_container = tk.Frame(self.root, bg=self.BG_MAIN)
             self.actions_container.pack(fill=tk.X, padx=16, pady=6)
@@ -876,6 +1079,41 @@ class ModernAgentManagerApp:
             )
             self.btn_copy_log.pack(side=tk.RIGHT)
             self._add_button_hover(self.btn_copy_log, self.BG_CARD_LIGHT, self.BG_CARD_HOVER)
+
+            # Live Progress Bar + ETA + Please Wait Banner
+            self.progress_frame = tk.Frame(log_container, bg=self.BG_HEADER, padx=10, pady=7)
+            self.progress_frame.pack(fill=tk.X, pady=(0, 6))
+
+            prog_top = tk.Frame(self.progress_frame, bg=self.BG_HEADER)
+            prog_top.pack(fill=tk.X, pady=(0, 5))
+
+            self.lbl_progress_status = tk.Label(
+                prog_top,
+                text=self.t("progress_ready"),
+                font=("Segoe UI", 8, "bold"),
+                fg=self.FG_MUTED,
+                bg=self.BG_HEADER
+            )
+            self.lbl_progress_status.pack(side=tk.LEFT)
+
+            self.lbl_progress_pct = tk.Label(
+                prog_top,
+                text="0%",
+                font=("Consolas", 9, "bold"),
+                fg=self.FG_MUTED,
+                bg=self.BG_HEADER
+            )
+            self.lbl_progress_pct.pack(side=tk.RIGHT)
+
+            self.progress_canvas = tk.Canvas(
+                self.progress_frame,
+                height=8,
+                bg="#08090d",
+                highlightthickness=1,
+                highlightbackground=self.BORDER_COLOR
+            )
+            self.progress_canvas.pack(fill=tk.X)
+            self.progress_canvas.bind("<Configure>", lambda e: self._redraw_progress_bar())
 
             # ScrolledText
             self.txt_log = ScrolledText(
@@ -1106,6 +1344,8 @@ class ModernAgentManagerApp:
 
         def switch_agent(self, agent_key: str):
             """Changes active agent tab and refreshes cards & stats."""
+            if self.is_busy:
+                return
             self.current_agent = agent_key
             theme = self.THEMES[agent_key]
 
@@ -1132,8 +1372,117 @@ class ModernAgentManagerApp:
 
             # Adapt card texts and buttons to active agent
             self._apply_agent_card_texts(agent_key)
+            self._refresh_path_card()
 
             self.log(self.t("log_mode_switched", icon=theme['icon'], name=theme['name']))
+            self.refresh_stats()
+
+        _AGENT_FOLDER_NAMES = {
+            "antigravity": ".gemini",
+            "claude": ".claude",
+            "codex": ".codex",
+        }
+
+        def _get_effective_agent_dir(self, agent_key: str) -> Path:
+            if agent_key == "antigravity":
+                return get_gemini_dir()
+            if agent_key == "claude":
+                return get_claude_dir()
+            return get_codex_dir()
+
+        def _refresh_path_card(self):
+            if not hasattr(self, "path_card"):
+                return
+            agent = self.current_agent
+            if agent == "all":
+                self.path_input_row.pack_forget()
+                self.lbl_path_hint.pack_forget()
+                self.lbl_path_title.config(
+                    text=self.t(
+                        "path_all_summary_fmt",
+                        agy=str(get_gemini_dir()),
+                        cl=str(get_claude_dir()),
+                        cdx=str(get_codex_dir()),
+                    ),
+                    fg=self.FG_MUTED,
+                )
+                return
+
+            folder = self._AGENT_FOLDER_NAMES[agent]
+            default_dir = get_default_agent_dir(agent)
+            current_dir = self._get_effective_agent_dir(agent)
+
+            self.lbl_path_title.config(
+                text=self.t("path_label_fmt", folder=folder),
+                fg=self.THEMES[agent]["accent"],
+            )
+            self.lbl_path_hint.config(text=self.t("path_hint_fmt", folder=folder, default=str(default_dir)))
+            self.lbl_path_hint.pack(side=tk.RIGHT)
+            self.path_input_row.pack(fill=tk.X)
+            self.var_custom_path.set(str(current_dir))
+            self.btn_path_apply.config(text=self.t("btn_apply_path"))
+            self.btn_path_browse.config(text=self.t("btn_browse"))
+            self.btn_path_reset.config(text=self.t("btn_reset_path"))
+
+        def _save_agent_custom_path(self, agent_key: str, new_path: Optional[str]):
+            custom_paths = self.config.setdefault("custom_paths", {})
+            if new_path:
+                custom_paths[agent_key] = new_path
+            else:
+                custom_paths.pop(agent_key, None)
+            save_config(self.config)
+            set_custom_agent_dirs(custom_paths)
+
+        def _resolve_selected_folder(self, agent_key: str, raw_path: str) -> Path:
+            p = Path(raw_path.strip()).expanduser()
+            expected = self._AGENT_FOLDER_NAMES[agent_key]
+            # If user picked parent home dir (e.g. C:\Users\Name) and it contains .gemini/.claude/.codex, resolve automatically
+            if p.name != expected and (p / expected).is_dir():
+                return p / expected
+            return p
+
+        def _browse_custom_path(self):
+            if self.is_busy or self.current_agent == "all":
+                return
+            agent = self.current_agent
+            folder = self._AGENT_FOLDER_NAMES[agent]
+            cur = self._get_effective_agent_dir(agent)
+            init_dir = str(cur if cur.exists() else cur.parent)
+            selected = filedialog.askdirectory(
+                title=self.t("path_dialog_title", folder=folder),
+                initialdir=init_dir,
+            )
+            if not selected:
+                return
+            self.var_custom_path.set(selected)
+            self._apply_custom_path()
+
+        def _apply_custom_path(self):
+            if self.is_busy or self.current_agent == "all":
+                return
+            agent = self.current_agent
+            raw = self.var_custom_path.get().strip()
+            if not raw:
+                self._reset_custom_path()
+                return
+            resolved = self._resolve_selected_folder(agent, raw)
+            self.var_custom_path.set(str(resolved))
+            self._save_agent_custom_path(agent, str(resolved))
+            folder = self._AGENT_FOLDER_NAMES[agent]
+            self.log(self.t("path_updated_log", agent=self.THEMES[agent]["name"], folder=folder, path=str(resolved)), "SUCCESS")
+            if not resolved.exists():
+                self.log(self.t("path_not_found_warn", path=str(resolved)), "WARNING")
+            self.refresh_stats()
+
+        def _reset_custom_path(self):
+            if self.is_busy or self.current_agent == "all":
+                return
+            agent = self.current_agent
+            self._save_agent_custom_path(agent, None)
+            default_dir = get_default_agent_dir(agent)
+            self.var_custom_path.set(str(default_dir))
+            folder = self._AGENT_FOLDER_NAMES[agent]
+            self.log(self.t("path_reset_log", agent=self.THEMES[agent]["name"], folder=folder, path=str(default_dir)))
             self.refresh_stats()
 
         def _apply_agent_card_texts(self, agent_key: str):
@@ -1256,6 +1605,136 @@ class ModernAgentManagerApp:
                 else:
                     self.lbl_stat_status.config(text=self.t("stat_status_idle"), fg="#34d399")
 
+        # ==================== PROGRESS & TASK RUNNER ====================
+
+        def _redraw_progress_bar(self):
+            if not hasattr(self, "progress_canvas"):
+                return
+            w = max(self.progress_canvas.winfo_width(), 1)
+            h = max(self.progress_canvas.winfo_height(), 1)
+            self.progress_canvas.delete("all")
+            if self._progress_pct <= 0:
+                return
+            fill_w = max(2, int(w * min(100, max(0, self._progress_pct)) / 100))
+            if self._progress_state == "done":
+                color = "#34d399"
+            elif self._progress_state == "error":
+                color = "#f87171"
+            else:
+                color = self.THEMES[self.current_agent]["accent"]
+            self.progress_canvas.create_rectangle(0, 0, fill_w, h, fill=color, outline="")
+
+        def _refresh_progress_texts(self):
+            if not hasattr(self, "lbl_progress_status"):
+                return
+            if self._progress_state == "ready":
+                self.lbl_progress_status.config(text=self.t("progress_ready"), fg=self.FG_MUTED)
+                self.lbl_progress_pct.config(text="0%", fg=self.FG_MUTED)
+            elif self._progress_state == "running" and self._active_op_key:
+                self.lbl_progress_status.config(
+                    text=self.t("progress_running", op=self.t(self._active_op_key)),
+                    fg="#fbbf24"
+                )
+            elif self._progress_state == "done":
+                self.lbl_progress_status.config(text=self.t("progress_done"), fg="#34d399")
+                self.lbl_progress_pct.config(text="100%", fg="#34d399")
+            elif self._progress_state == "error":
+                self.lbl_progress_status.config(text=self.t("progress_error"), fg="#f87171")
+
+        def _update_progress_ui(self, pct: int, pct_text: str):
+            self._progress_pct = pct
+            self.lbl_progress_pct.config(text=pct_text, fg="#f8fafc" if self.is_busy else self.FG_MUTED)
+            self._redraw_progress_bar()
+
+        def _set_actions_enabled(self, enabled: bool):
+            state = tk.NORMAL if enabled else tk.DISABLED
+            for widget in (
+                self.btn_clean,
+                self.btn_undo,
+                self.btn_export_chats,
+                self.btn_import_chats,
+                self.btn_export_skills,
+                self.btn_import_skills,
+                self.btn_path_apply,
+                self.btn_path_browse,
+                self.btn_path_reset,
+                self.entry_path,
+            ):
+                widget.config(state=state)
+
+        def _format_eta(self, seconds: int) -> str:
+            if self.lang == "tr":
+                return f"{seconds} sn" if seconds < 60 else f"{seconds // 60} dk {seconds % 60:02d} sn"
+            return f"{seconds}s" if seconds < 60 else f"{seconds // 60}m {seconds % 60:02d}s"
+
+        def _run_background_task(self, op_key: str, worker_fn, on_complete):
+            if self.is_busy:
+                return
+            self.is_busy = True
+            self._active_op_key = op_key
+            self._progress_state = "running"
+            self._progress_pct = 0
+            self._set_actions_enabled(False)
+            self.lbl_progress_status.config(
+                text=self.t("progress_running", op=self.t(op_key)),
+                fg="#fbbf24"
+            )
+            self._update_progress_ui(0, f"0% • {self.t('progress_eta_calc')}")
+
+            start_t = time.monotonic()
+            state = {"last_ui": 0.0, "last_log": 0.0, "last_log_pct": -1}
+
+            def progress_cb(done: int, total: int):
+                if total <= 0:
+                    return
+                pct = int(min(100, max(0, (done / total) * 100)))
+                now = time.monotonic()
+                elapsed = now - start_t
+
+                if done > 0 and elapsed >= 0.5 and pct < 100:
+                    rem = max(0, int(elapsed * (total - done) / done))
+                    eta_str = self._format_eta(rem)
+                    pct_text = self.t("progress_eta_fmt", pct=pct, eta=eta_str)
+                elif pct >= 100:
+                    eta_str = self._format_eta(0)
+                    pct_text = "100%"
+                else:
+                    eta_str = self.t("progress_eta_calc")
+                    pct_text = f"{pct}% • {eta_str}"
+
+                if now - state["last_ui"] >= 0.1 or pct >= 100:
+                    state["last_ui"] = now
+                    self.root.after(0, self._update_progress_ui, pct, pct_text)
+
+                if pct != state["last_log_pct"] and now - state["last_log"] >= 5.0 and pct < 100:
+                    state["last_log"] = now
+                    state["last_log_pct"] = pct
+                    self.log(self.t("progress_log_fmt", pct=pct, eta=eta_str))
+
+            def _runner():
+                success = False
+                msg = ""
+                try:
+                    success, msg = worker_fn(progress_cb)
+                except Exception as exc:
+                    success, msg = False, str(exc)
+
+                def _finish():
+                    self.is_busy = False
+                    self._set_actions_enabled(True)
+                    if success:
+                        self._progress_state = "done"
+                        self._update_progress_ui(100, "100%")
+                    else:
+                        self._progress_state = "error"
+                        self._redraw_progress_bar()
+                    self._refresh_progress_texts()
+                    on_complete(success, msg)
+
+                self.root.after(0, _finish)
+
+            threading.Thread(target=_runner, daemon=True).start()
+
         # ==================== ACTIONS ====================
 
         def action_clean(self):
@@ -1270,30 +1749,26 @@ class ModernAgentManagerApp:
             if not confirm:
                 return
 
-            def _clean_worker():
+            def _worker(pcb):
                 self.log(self.t("clean_log_start", agent=theme['name']))
                 if agent == "antigravity":
-                    success, msg = clean_all_conversations_and_projects(take_backup=True, force_close=True, log=self.log)
+                    res = clean_all_conversations_and_projects(take_backup=True, force_close=True, log=self.log, progress_callback=pcb)
                 elif agent == "claude":
-                    success, msg = clean_claude_conversations(take_backup=True, force_close=True, log=self.log)
+                    res = clean_claude_conversations(take_backup=True, force_close=True, log=self.log, progress_callback=pcb)
                 elif agent == "codex":
-                    success, msg = clean_codex_conversations(take_backup=True, force_close=True, log=self.log)
-                elif agent == "all":
-                    success, msg = clean_all_agents(take_backup=True, force_close=True, log=self.log)
-
-                self.refresh_stats()
-                if success:
-                    self.root.after(0, lambda: messagebox.showinfo(
-                        self.t("dialog_success"),
-                        self.t("clean_success", agent=theme['name'])
-                    ))
+                    res = clean_codex_conversations(take_backup=True, force_close=True, log=self.log, progress_callback=pcb)
                 else:
-                    self.root.after(0, lambda: messagebox.showerror(
-                        self.t("dialog_error"),
-                        self.t("clean_error", msg=msg)
-                    ))
+                    res = clean_all_agents(take_backup=True, force_close=True, log=self.log, progress_callback=pcb)
+                self.refresh_stats()
+                return res
 
-            threading.Thread(target=_clean_worker, daemon=True).start()
+            def _done(success, msg):
+                if success:
+                    messagebox.showinfo(self.t("dialog_success"), self.t("clean_success", agent=theme['name']))
+                else:
+                    messagebox.showerror(self.t("dialog_error"), self.t("clean_error", msg=msg))
+
+            self._run_background_task("op_clean", _worker, _done)
 
         def action_undo(self):
             agent = self.current_agent
@@ -1330,22 +1805,24 @@ class ModernAgentManagerApp:
             if not confirm:
                 return
 
-            def _undo_worker():
+            def _worker(pcb):
                 self.log(self.t("undo_log_start", file=latest_backup.name))
                 if agent == "claude":
-                    success, msg = restore_claude_backup(latest_backup, log=self.log)
+                    res = restore_claude_backup(latest_backup, log=self.log, progress_callback=pcb)
                 elif agent == "codex":
-                    success, msg = restore_codex_backup(latest_backup, log=self.log)
+                    res = restore_codex_backup(latest_backup, log=self.log, progress_callback=pcb)
                 else:
-                    success, msg = restore_backup(latest_backup, log=self.log)
-
+                    res = restore_backup(latest_backup, log=self.log, progress_callback=pcb)
                 self.refresh_stats()
-                if success:
-                    self.root.after(0, lambda: messagebox.showinfo(self.t("dialog_success"), self.t("undo_success")))
-                else:
-                    self.root.after(0, lambda: messagebox.showerror(self.t("dialog_error"), self.t("undo_error", msg=msg)))
+                return res
 
-            threading.Thread(target=_undo_worker, daemon=True).start()
+            def _done(success, msg):
+                if success:
+                    messagebox.showinfo(self.t("dialog_success"), self.t("undo_success"))
+                else:
+                    messagebox.showerror(self.t("dialog_error"), self.t("undo_error", msg=msg))
+
+            self._run_background_task("op_undo", _worker, _done)
 
         def action_export_chats(self):
             agent = self.current_agent
@@ -1363,29 +1840,23 @@ class ModernAgentManagerApp:
 
             out_p = Path(save_path)
 
-            def _exp_worker():
+            def _worker(pcb):
                 self.log(self.t("export_chats_log_start", agent=theme['name']))
                 if agent == "antigravity":
-                    success, msg = export_chats_and_projects(out_p, log=self.log)
+                    return export_chats_and_projects(out_p, log=self.log, progress_callback=pcb)
                 elif agent == "claude":
-                    success, msg = export_claude_chats(out_p, log=self.log)
+                    return export_claude_chats(out_p, log=self.log, progress_callback=pcb)
                 elif agent == "codex":
-                    success, msg = export_codex_chats(out_p, log=self.log)
-                elif agent == "all":
-                    success, msg = export_all_agents_chats(out_p, log=self.log)
+                    return export_codex_chats(out_p, log=self.log, progress_callback=pcb)
+                return export_all_agents_chats(out_p, log=self.log, progress_callback=pcb)
 
+            def _done(success, msg):
                 if success:
-                    self.root.after(0, lambda: messagebox.showinfo(
-                        self.t("dialog_success"),
-                        self.t("export_chats_success", agent=theme['name'], file=out_p.name)
-                    ))
+                    messagebox.showinfo(self.t("dialog_success"), self.t("export_chats_success", agent=theme['name'], file=out_p.name))
                 else:
-                    self.root.after(0, lambda: messagebox.showerror(
-                        self.t("dialog_error"),
-                        self.t("export_chats_error", msg=msg)
-                    ))
+                    messagebox.showerror(self.t("dialog_error"), self.t("export_chats_error", msg=msg))
 
-            threading.Thread(target=_exp_worker, daemon=True).start()
+            self._run_background_task("op_export_chats", _worker, _done)
 
         def action_import_chats(self):
             agent = self.current_agent
@@ -1409,30 +1880,26 @@ class ModernAgentManagerApp:
 
             import_mode = "replace" if mode_choice else "merge"
 
-            def _imp_worker():
+            def _worker(pcb):
                 self.log(self.t("import_chats_log_start", agent=theme['name'], mode=import_mode.upper()))
                 if agent == "antigravity":
-                    success, msg = import_chats_and_projects(in_p, mode=import_mode, remap_paths=True, log=self.log)
+                    res = import_chats_and_projects(in_p, mode=import_mode, remap_paths=True, log=self.log, progress_callback=pcb)
                 elif agent == "claude":
-                    success, msg = import_claude_chats(in_p, mode=import_mode, remap_paths=True, log=self.log)
+                    res = import_claude_chats(in_p, mode=import_mode, remap_paths=True, log=self.log, progress_callback=pcb)
                 elif agent == "codex":
-                    success, msg = import_codex_chats(in_p, mode=import_mode, remap_paths=True, log=self.log)
-                elif agent == "all":
-                    success, msg = import_all_agents_chats(in_p, mode=import_mode, remap_paths=True, log=self.log)
-
-                self.refresh_stats()
-                if success:
-                    self.root.after(0, lambda: messagebox.showinfo(
-                        self.t("dialog_success"),
-                        self.t("import_chats_success", agent=theme['name'])
-                    ))
+                    res = import_codex_chats(in_p, mode=import_mode, remap_paths=True, log=self.log, progress_callback=pcb)
                 else:
-                    self.root.after(0, lambda: messagebox.showerror(
-                        self.t("dialog_error"),
-                        self.t("import_chats_error", msg=msg)
-                    ))
+                    res = import_all_agents_chats(in_p, mode=import_mode, remap_paths=True, log=self.log, progress_callback=pcb)
+                self.refresh_stats()
+                return res
 
-            threading.Thread(target=_imp_worker, daemon=True).start()
+            def _done(success, msg):
+                if success:
+                    messagebox.showinfo(self.t("dialog_success"), self.t("import_chats_success", agent=theme['name']))
+                else:
+                    messagebox.showerror(self.t("dialog_error"), self.t("import_chats_error", msg=msg))
+
+            self._run_background_task("op_import_chats", _worker, _done)
 
         def action_export_skills(self):
             agent = self.current_agent
@@ -1450,29 +1917,23 @@ class ModernAgentManagerApp:
 
             out_p = Path(save_path)
 
-            def _exp_sk_worker():
+            def _worker(pcb):
                 self.log(self.t("export_skills_log_start", agent=theme['name']))
                 if agent == "antigravity":
-                    success, msg = export_skills(out_p, include_plugins=True, include_global_rules=True, log=self.log)
+                    return export_skills(out_p, include_plugins=True, include_global_rules=True, log=self.log, progress_callback=pcb)
                 elif agent == "claude":
-                    success, msg = export_claude_skills(out_p, log=self.log)
+                    return export_claude_skills(out_p, log=self.log, progress_callback=pcb)
                 elif agent == "codex":
-                    success, msg = export_codex_skills(out_p, log=self.log)
-                elif agent == "all":
-                    success, msg = export_all_agents_skills(out_p, log=self.log)
+                    return export_codex_skills(out_p, log=self.log, progress_callback=pcb)
+                return export_all_agents_skills(out_p, log=self.log, progress_callback=pcb)
 
+            def _done(success, msg):
                 if success:
-                    self.root.after(0, lambda: messagebox.showinfo(
-                        self.t("dialog_success"),
-                        self.t("export_skills_success", agent=theme['name'], file=out_p.name)
-                    ))
+                    messagebox.showinfo(self.t("dialog_success"), self.t("export_skills_success", agent=theme['name'], file=out_p.name))
                 else:
-                    self.root.after(0, lambda: messagebox.showerror(
-                        self.t("dialog_error"),
-                        self.t("export_skills_error", msg=msg)
-                    ))
+                    messagebox.showerror(self.t("dialog_error"), self.t("export_skills_error", msg=msg))
 
-            threading.Thread(target=_exp_sk_worker, daemon=True).start()
+            self._run_background_task("op_export_skills", _worker, _done)
 
         def action_import_skills(self):
             agent = self.current_agent
@@ -1487,30 +1948,26 @@ class ModernAgentManagerApp:
 
             in_p = Path(file_path)
 
-            def _imp_sk_worker():
+            def _worker(pcb):
                 self.log(self.t("import_skills_log_start", agent=theme['name']))
                 if agent == "antigravity":
-                    success, msg = import_skills(in_p, log=self.log)
+                    res = import_skills(in_p, log=self.log, progress_callback=pcb)
                 elif agent == "claude":
-                    success, msg = import_claude_skills(in_p, log=self.log)
+                    res = import_claude_skills(in_p, log=self.log, progress_callback=pcb)
                 elif agent == "codex":
-                    success, msg = import_codex_skills(in_p, log=self.log)
-                elif agent == "all":
-                    success, msg = import_all_agents_skills(in_p, log=self.log)
-
-                self.refresh_stats()
-                if success:
-                    self.root.after(0, lambda: messagebox.showinfo(
-                        self.t("dialog_success"),
-                        self.t("import_skills_success", agent=theme['name'])
-                    ))
+                    res = import_codex_skills(in_p, log=self.log, progress_callback=pcb)
                 else:
-                    self.root.after(0, lambda: messagebox.showerror(
-                        self.t("dialog_error"),
-                        self.t("import_skills_error", msg=msg)
-                    ))
+                    res = import_all_agents_skills(in_p, log=self.log, progress_callback=pcb)
+                self.refresh_stats()
+                return res
 
-            threading.Thread(target=_imp_sk_worker, daemon=True).start()
+            def _done(success, msg):
+                if success:
+                    messagebox.showinfo(self.t("dialog_success"), self.t("import_skills_success", agent=theme['name']))
+                else:
+                    messagebox.showerror(self.t("dialog_error"), self.t("import_skills_error", msg=msg))
+
+            self._run_background_task("op_import_skills", _worker, _done)
 
 
 def run_gui():
@@ -1552,6 +2009,7 @@ def main():
     parser.add_argument("--cli", action="store_true", help="Run in CLI mode directly without GUI")
 
     args = parser.parse_args()
+    set_custom_agent_dirs(load_config().get("custom_paths"))
 
     cli_flags = [args.status, args.clean, args.export_chats, args.import_chats, args.export_skills, args.import_skills, args.restore, args.cli]
     if any(cli_flags):
