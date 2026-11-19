@@ -120,6 +120,15 @@ python antigravity_manager.py --agent all --import-skills "D:\Backups\all_skills
 
 ---
 
+## 💡 Common Use Cases
+
+* **Migrate AI chats to a new PC:** Move your Google Antigravity, Claude Code, and OpenAI Codex conversation history to another computer with automatic `C:\Users\<User>` path remapping.
+* **Backup & restore AI coding agent data:** Create portable `.zip` backups of SQLite chat databases, `.jsonl` sessions, `SKILL.md` skills, and `CLAUDE.md` / `AGENTS.md` rules.
+* **Safely reset or wipe chat history:** Delete old conversations and workspace logs in one click while keeping an automatic rollback snapshot in `backups/`.
+* **Merge sessions across machines:** Combine chat history from two computers side-by-side without overwriting existing local conversations.
+
+---
+
 ## 🔒 Safety & Data Integrity
 
 1. **Non-Destructive Exports:** Export operations do not terminate active agent processes; files are safely read and packaged on the fly.
@@ -211,6 +220,15 @@ python antigravity_manager.py --agent all --export-skills "D:\Yedekler\all_skill
 # Yeni bilgisayarda tüm yetenek paketini kur
 python antigravity_manager.py --agent all --import-skills "D:\Yedekler\all_skills.zip"
 ```
+
+---
+
+## 💡 Sık Kullanılan Senaryolar
+
+* **AI sohbet geçmişini yeni bilgisayara taşıma:** Google Antigravity, Claude Code ve OpenAI Codex konuşmalarını otomatik kullanıcı yolu uyarlamasıyla (`C:\Users\<Kullanici>`) başka bir PC'ye aktarma.
+* **Yapay zeka ajan verilerini ve ayarlarını yedekleme:** SQLite sohbet veritabanlarını, `.jsonl` oturumlarını, `SKILL.md` yeteneklerini ve `CLAUDE.md` / `AGENTS.md` kurallarını taşınabilir `.zip` olarak yedekleme.
+* **Sohbet geçmişini güvenli sıfırlama / silme:** Eski konuşmaları ve çalışma alanı loglarını `backups/` klasörüne otomatik geri alma yedeği oluşturarak tek tıkla temizleme.
+* **İki bilgisayardaki sohbetleri birleştirme (Merge):** Mevcut yerel oturumları silmeden farklı bilgisayarlardaki sohbet geçmişlerini yan yana birleştirme.
 
 ---
 
