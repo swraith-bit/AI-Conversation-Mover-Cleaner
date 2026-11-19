@@ -1,2 +1,226 @@
-# AI-Conversation-Mover-Eraser
-Desktop GUI &amp; CLI tool to reset, backup, and migrate chats, skills, and configs for Antigravity, Claude Code, and OpenAI Codex across machines.
+# ⚡ AI Conversation Mover-Eraser
+### Antigravity • Claude Code • OpenAI Codex
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" alt="Python 3.10+">
+  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Platform Windows">
+  <img src="https://img.shields.io/badge/UI-Tkinter%20Dark%20Slate-171924?style=for-the-badge" alt="UI Tkinter Dark Slate">
+  <img src="https://img.shields.io/badge/Languages-English%20%7C%20Turkish-38bdf8?style=for-the-badge" alt="Multi-language">
+  <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License">
+</p>
+
+<p align="center">
+  <a href="#-english"><b>🇬🇧 English Documentation</b></a> •
+  <a href="#-türkçe"><b>🇹🇷 Türkçe Dokümantasyon</b></a>
+</p>
+
+---
+
+<a name="-english"></a>
+# 🇬🇧 English
+
+**AI Conversation Mover-Eraser** is a lightweight, zero-dependency desktop utility (GUI & CLI) built specifically for developers using **Google Antigravity**, **Anthropic Claude Code**, and **OpenAI Codex**.
+
+It provides **one-click conversation resetting** with automatic safety backups, **lossless cross-PC migration** (complete with automated username and path remapping), and **custom skills/rules packaging**.
+
+<p align="center">
+  <img src="screenshots/app_preview.png" alt="AI Conversation Mover-Eraser - Desktop GUI Preview" width="920" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+</p>
+
+---
+
+## ✨ Key Features
+
+* **🧹 1) One-Click Deep Reset & Wipe:**
+  * Purges conversation databases, project workspaces, memory artifacts, and logs with a single click.
+  * **Automatic Safety Snapshot:** Always captures a timestamped rollback archive into `backups/` before deleting anything.
+  * **🛡️ One-Click Undo:** Accidentally wiped your sessions? Restore back to your last snapshot in seconds.
+
+* **📦 2) Lossless Cross-PC Chat Migration:**
+  * **Portable Export (.zip):** Bundles SQLite chat databases (`.db`), session logs (`.jsonl`), memory transcripts, and project states into a clean `.zip` archive.
+  * **Smart Import:** Choose between **Clean Replace** (wipe & restore backup only) or **Merge** (keep existing local chats and merge new ones side-by-side).
+  * **🔄 Automatic Path Remapping:** Seamlessly translates user directory paths and project slug folder names from your old machine (`C:\Users\Alice\...`) to your new machine (`C:\Users\Bob\...`).
+
+* **⚡ 3) Skills, Commands & Rules Migration:**
+  * Packages your custom skills (`SKILL.md`), custom subagents, rules files (`CLAUDE.md`, `AGENTS.md`), and global configs into a portable `.zip`.
+  * Installs seamlessly onto a new machine with automatic folder structure resolution.
+
+* **⚡ All-in-One Master Bundle:**
+  * Moving to a brand new laptop? Export **all 3 agents** (Antigravity + Claude + Codex) into a single master archive and restore everything at once.
+
+* **🌐 Native Multi-Language Support:**
+  * Modern English and Turkish interface with persistent preference. Toggle instantly from the top-right corner.
+
+* **🚀 Zero External Dependencies:**
+  * Built entirely on Python standard libraries (`tkinter`, `sqlite3`, `zipfile`, `pathlib`). No `pip install` required!
+
+---
+
+## 🖥️ Supported AI Agents & Storage Architectures
+
+| Agent | Chat & Session Directory | Skills & Commands Directory | Configurations & Rules |
+| :--- | :--- | :--- | :--- |
+| **🚀 Antigravity** | `~/.gemini/antigravity/conversations/` & `brain/` | `~/.gemini/config/skills/` & `antigravity/skills/` | `~/.antigravity/`, `projects.json` |
+| **🟣 Claude Code** | `~/.claude/projects/<slug>/` & `history.jsonl` | `~/.claude/skills/`, `commands/`, `agents/` | `~/.claude/CLAUDE.md`, `settings.json` |
+| **🟢 OpenAI Codex** | `~/.codex/sessions/` & `history/` | `~/.codex/skills/`, `prompts/` | `~/.codex/config.toml`, `AGENTS.md` |
+| **⚡ All-in-One** | Unified bundle of all 3 agents | Unified bundle of all 3 agent skills | Unified Master Manifest |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Modern Desktop GUI
+Simply double-click **`AntigravityManager.bat`** in the project folder. The dark-themed desktop dashboard will launch immediately.
+
+*(Alternatively, run from your terminal: `python antigravity_manager.py`)*
+
+### 2. Command Line Interface (CLI)
+You can automate or script operations with the integrated CLI:
+
+```bash
+# Print status report for Antigravity
+python antigravity_manager.py --agent antigravity --status
+
+# Print status report for all agents (English)
+python antigravity_manager.py --agent all --status --lang en
+
+# Wipe Claude Code chats (creates automatic backup first)
+python antigravity_manager.py --agent claude --clean
+
+# Export Antigravity chats to ZIP
+python antigravity_manager.py --agent antigravity --export-chats "D:\Backups\antigravity_chats.zip"
+
+# Import Claude Code chats with automated path remapping (Merge mode)
+python antigravity_manager.py --agent claude --import-chats "D:\Backups\claude_chats.zip" --merge
+
+# Export all agents' skills into one master bundle
+python antigravity_manager.py --agent all --export-skills "D:\Backups\all_skills.zip"
+
+# Install all skills on the new machine
+python antigravity_manager.py --agent all --import-skills "D:\Backups\all_skills.zip"
+```
+
+### CLI Options Reference
+
+| Argument | Description | Default |
+| :--- | :--- | :--- |
+| `--agent {antigravity,claude,codex,all}` | Target AI agent | `antigravity` |
+| `--lang {en,tr}` | Language for output & interface | `en` |
+| `--status` | Print real-time status and metrics | - |
+| `--clean` | Wipe conversation history and sessions | - |
+| `--no-backup` | Skip automatic backup before clean | `False` |
+| `--export-chats <ZIP_PATH>` | Export chats to specified zip file | - |
+| `--import-chats <ZIP_PATH>` | Import chats from specified zip file | - |
+| `--merge` | Merge incoming chats into existing ones | `False` (Replace) |
+| `--no-remap` | Disable automatic username path remapping | `False` |
+| `--export-skills <ZIP_PATH>` | Export custom skills to zip file | - |
+| `--import-skills <ZIP_PATH>` | Install skills from zip file | - |
+| `--restore <ZIP_PATH>` | Restore a previous safety backup | - |
+| `--cli` | Force CLI mode execution | `False` |
+
+---
+
+## 🔒 Safety & Data Integrity
+
+1. **Non-Destructive Exports:** Export operations do not terminate active agent processes; files are safely read and packaged on the fly.
+2. **Fail-Safe Deletion:** Before wiping any conversation or workspace history, an atomic snapshot is archived in `backups/`.
+3. **Cross-Platform Path Conversion:** Resolves user directory differences (`C:\Users\<OldUser>` ➔ `C:\Users\<NewUser>`) during import to avoid broken project pointers.
+
+---
+---
+
+<a name="-türkçe"></a>
+# 🇹🇷 Türkçe
+
+**AI Conversation Mover-Eraser**, **Google Antigravity**, **Anthropic Claude Code** ve **OpenAI Codex** kullanan geliştiriciler için özel olarak geliştirilmiş sıfır harici bağımlılığa sahip modern bir masaüstü yönetim aracıdır (GUI ve CLI).
+
+Geliştiricilerin oturumlarını **tek tuşla sıfırlama** (otomatik güvenlik yedeği korumalı), **bilgisayarlar arasında eksiksiz taşıma** (otomatik kullanıcı yolu uyarlama - path remapping) ve **özel yetenekleri (skills) paketleme** işlemlerini gerçekleştirir.
+
+<p align="center">
+  <img src="screenshots/app_preview_tr.png" alt="AI Conversation Mover-Eraser - Türkçe Masaüstü Arayüzü" width="920" style="border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+</p>
+
+---
+
+## ✨ Temel Özellikler
+
+* **🧹 1) Tek Tuşla Derinlemesine Sıfırlama:**
+  * Sohbet veritabanlarını, proje kayıtlarını, hafıza transkriptlerini ve logları tek tıkla siler.
+  * **Otomatik Güvenlik Yedeği:** Herhangi bir silme işlemi öncesinde `backups/` klasörüne zaman damgalı güvenlik yedeği alır.
+  * **🛡️ Tek Tuşla Geri Al (Undo):** Yanlışlıkla yapılan sıfırlamaları son güvenlik yedeğinden anında geri döndürür.
+
+* **📦 2) Bilgisayarlar Arası Eksiksiz Sohbet Taşıma:**
+  * **Taşınabilir Dışa Aktarma (.zip):** SQLite sohbet veritabanlarını (`.db`), oturum kayıtlarını (`.jsonl`), artifact hafızasını ve proje durumlarını taşınabilir bir `.zip` dosyasına paketler.
+  * **Akıllı İçe Aktarma:** **Temiz Kurulum** (Replace) veya **Birleştirme** (Merge - mevcut sohbetleri koruyarak ekleme) seçenekleri sunar.
+  * **🔄 Otomatik Yol Uyarlama (Path Remapping):** Eski bilgisayardaki kullanıcı klasörünü (`C:\Users\EskiKullanici\...`) yeni bilgisayarınızdaki dizine (`C:\Users\YeniKullanici\...`) ve Claude proje slug klasör adlarına otomatik olarak dönüştürür.
+
+* **⚡ 3) Skills (Yetenek), Komut ve Kural Taşıma:**
+  * Özel yetenek dosyalarınızı (`SKILL.md`), alt ajan tanımlarınızı, kural dosyalarınızı (`CLAUDE.md`, `AGENTS.md`) ve global ayarlarınızı paketler.
+  * Yeni bilgisayara tek tuşla, doğru dizin yapısını otomatik oluşturarak kurar.
+
+* **⚡ Hepsi Bir Arada (Master Paket):**
+  * Yeni bilgisayara geçerken 3 ajanın (Antigravity + Claude + Codex) tüm verilerini tek bir master pakette toplayabilir veya tek hamlede kurabilirsiniz.
+
+* **🌐 Dahili İki Dilli Arayüz (Türkçe & İngilizce):**
+  * Sağ üst köşedeki dil seçici ile anında İngilizce veya Türkçe'ye geçiş yapılabilir; tercih hatırlanır.
+
+* **🚀 Sıfır Ek Bağımlılık:**
+  * Standart Python 3 kütüphaneleriyle çalışır. Yeni bilgisayarda ek `pip install` gerektirmez.
+
+---
+
+## 🖥️ Desteklenen Araçlar ve Depolama Yapıları
+
+| Araç | Sohbet / Oturum Dizini | Skills / Komut Dizini | Yapılandırma & Kurallar |
+| :--- | :--- | :--- | :--- |
+| **🚀 Antigravity** | `~/.gemini/antigravity/conversations/` & `brain/` | `~/.gemini/config/skills/` & `antigravity/skills/` | `~/.antigravity/`, `projects.json` |
+| **🟣 Claude Code** | `~/.claude/projects/<slug>/` & `history.jsonl` | `~/.claude/skills/`, `commands/`, `agents/` | `~/.claude/CLAUDE.md`, `settings.json` |
+| **🟢 OpenAI Codex** | `~/.codex/sessions/` & `history/` | `~/.codex/skills/`, `prompts/` | `~/.codex/config.toml`, `AGENTS.md` |
+| **⚡ Tüm Araçlar** | 3 aracın tüm oturumları tek `.zip` | 3 aracın tüm yetenekleri tek `.zip` | Master Manifest ile tam yedek |
+
+---
+
+## 🚀 Hızlı Başlangıç
+
+### 1. Masaüstü Arayüzü (GUI)
+Klasör içindeki **`AntigravityManager.bat`** dosyasına çift tıklayın. Koyu temalı modern sekmeli arayüz açılacaktır.
+
+*(Alternatif olarak terminalden `python antigravity_manager.py` komutuyla açabilirsiniz).*
+
+### 2. Komut Satırı (CLI) Kullanımı
+
+```bash
+# Antigravity durum raporu
+python antigravity_manager.py --agent antigravity --status --lang tr
+
+# Tüm araçların toplu durum raporu
+python antigravity_manager.py --agent all --status --lang tr
+
+# Claude sohbetlerini sıfırla (öncesinde otomatik yedek alır)
+python antigravity_manager.py --agent claude --clean
+
+# Antigravity sohbetlerini dışa aktar
+python antigravity_manager.py --agent antigravity --export-chats "D:\Yedekler\antigravity_chats.zip"
+
+# Claude sohbetlerini içe aktar (yol uyarlamalı, birleştirme modu)
+python antigravity_manager.py --agent claude --import-chats "D:\Yedekler\claude_chats.zip" --merge
+
+# Tüm araçların yetenek paketini dışa aktar
+python antigravity_manager.py --agent all --export-skills "D:\Yedekler\all_skills.zip"
+
+# Yeni bilgisayarda tüm yetenek paketini kur
+python antigravity_manager.py --agent all --import-skills "D:\Yedekler\all_skills.zip"
+```
+
+---
+
+## 🔒 Güvenlik ve Veri Bütünlüğü
+
+* Dışa aktarma (export) işlemleri sırasında çalışan uygulamalar kapatılmaz; veriler güvenle canlı okunup paketlenir.
+* Sıfırlama (clean) işlemlerinden önce otomatik yedek `backups/` klasörüne arşivlenir.
+* Kullanıcı yollarındaki farklılıklar içe aktarma anında otomatik uyarlanır.
+
+---
+
+## 📄 License / Lisans
+This project is licensed under the MIT License. / Bu proje MIT Lisansı ile lisanslanmıştır.
