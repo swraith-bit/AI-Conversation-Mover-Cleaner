@@ -1,0 +1,52 @@
+name: Build Portable macOS App
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+    paths:
+      - "antigravity_manager.py"
+      - "core/**"
+      - ".github/workflows/build-macos.yml"
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build AntigravityManager.app
+        run: |
+          pyinstaller \
+            --windowed \
+            --onedir \
+            --name "AntigravityManager" \
+            --clean \
+            --noconfirm \
+            antigravity_manager.py
+
+      - name: Package portable zip
+        run: |
+          mkdir -p dist/portable
+          cp -R dist/AntigravityManager.app dist/portable/
+          cp config.json dist/portable/
+          cd dist/portable
+          ditto -c -k --sequesterRsrc --keepParent . ../AntigravityManager-macOS-portable.zip
+
+      - name: Upload macOS Portable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AntigravityManager-macOS-portable
+          path: dist/AntigravityManager-macOS-portable.zip
