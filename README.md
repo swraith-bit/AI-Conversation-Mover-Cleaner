@@ -3,7 +3,7 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python" alt="Python 3.10+">
-  <img src="https://img.shields.io/badge/Platform-Windows-0078D6?style=for-the-badge&logo=windows" alt="Platform Windows">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS-0078D6?style=for-the-badge&logo=windows" alt="Platform Windows and macOS">
   <img src="https://img.shields.io/badge/UI-Tkinter%20Dark%20Slate-171924?style=for-the-badge" alt="UI Tkinter Dark Slate">
   <img src="https://img.shields.io/badge/Languages-English%20%7C%20Turkish-38bdf8?style=for-the-badge" alt="Multi-language">
   <img src="https://img.shields.io/badge/License-MIT-green?style=for-the-badge" alt="MIT License">
@@ -63,17 +63,25 @@ It provides **one-click conversation resetting** with automatic safety backups, 
 ## 🛠️ Requirements & Installation
 
 ### What is Required?
-* **Portable Mode (`AntigravityManager.exe`):** Nothing! Python, Tkinter, SQLite, and ZIP support are bundled inside the single `.exe`. Just double-click and run.
-* **From Source (`AntigravityManager.bat` / `.py`):**
-  1. **Python 3.10 or newer** (includes `tkinter`, `sqlite3`, and `zipfile` in the standard installation on Windows).
+* **Portable Mode (`AntigravityManager.exe` / `AntigravityManager.app`):** Nothing! Python, Tkinter, SQLite, and ZIP support are bundled inside. Just double-click and run.
+* **From Source (`AntigravityManager.bat` / `AntigravityManager.command` / `.py`):**
+  1. **Python 3.10 or newer** (includes `tkinter`, `sqlite3`, and `zipfile` in the standard installation on Windows; on macOS with Homebrew, install `python-tk` if needed).
   2. **No third-party Python packages** (`pip install` is **not** needed).
   3. **No WinRAR or 7-Zip needed** — `.zip` archives are created and extracted natively via Python.
-  4. **Windows OS** (uses built-in `tasklist` / `taskkill` to safely detect or close running agent processes before import/reset).
+  4. **Windows & macOS** (uses `tasklist`/`taskkill` on Windows and `ps`/`SIGTERM` + `~/Library/Application Support/` paths on macOS).
 
 ### How to Install & Set Up
-* **Option 1 — Portable EXE (Recommended, No Python Required):**
+* **Option 1 — Portable EXE (Windows, Recommended, No Python Required):**
   Download the repository (or `AntigravityManager.exe`) and double-click **`AntigravityManager.exe`** (or **`AntigravityManager.bat`**, which launches the `.exe` automatically if present).
-* **Option 2 — Run from Python Source:**
+* **Option 2 — Portable macOS App (`AntigravityManager.app` / `AntigravityManager.command`):**
+  - **Standalone `.app`:** Download `AntigravityManager-macOS-portable.zip` from the **GitHub Actions** (`Build Portable macOS App`) artifacts, or build directly on a Mac with:
+    ```bash
+    pip3 install pyinstaller
+    pyinstaller --windowed --onedir --name "AntigravityManager" antigravity_manager.py
+    ```
+    *(On first launch of an unsigned `.app`, right-click → **Open** or run `xattr -cr AntigravityManager.app`.)*
+  - **Launcher Script:** Or copy the folder to your Mac, run `chmod +x AntigravityManager.command` once, and double-click **`AntigravityManager.command`**.
+* **Option 3 — Run from Python Source:**
   1. Double-click **`AntigravityManager.bat`**. If Python or Tkinter is missing, the launcher offers to install Python 3.12 (with Tkinter included) automatically via `winget`.
   2. Or install manually from [python.org/downloads](https://www.python.org/downloads/) (check **"Add python.exe to PATH"** and **"tcl/tk and IDLE"**) or run:
      ```powershell
@@ -218,17 +226,25 @@ Geliştiricilerin oturumlarını **tek tuşla sıfırlama** (otomatik güvenlik 
 ## 🛠️ Gereksinimler ve Kurulum
 
 ### Çalışması İçin Neler Gerekli?
-* **Taşınabilir Mod (`AntigravityManager.exe`):** Hiçbir kurulum gerekmez! Python, Tkinter, SQLite ve ZIP desteği tek `.exe` içine gömülüdür; çift tıklayıp doğrudan çalıştırabilirsiniz.
-* **Kaynak Koddan Çalıştırma (`AntigravityManager.bat` / `.py`):**
-  1. **Python 3.10 veya üzeri** (Windows kurulumunda `tkinter`, `sqlite3` ve `zipfile` standart olarak gelir).
+* **Taşınabilir Mod (`AntigravityManager.exe` / `AntigravityManager.app`):** Hiçbir kurulum gerekmez! Python, Tkinter, SQLite ve ZIP desteği paket içine gömülüdür; çift tıklayıp doğrudan çalıştırabilirsiniz.
+* **Kaynak Koddan Çalıştırma (`AntigravityManager.bat` / `AntigravityManager.command` / `.py`):**
+  1. **Python 3.10 veya üzeri** (Windows'ta `tkinter`, `sqlite3` ve `zipfile` standart gelir; macOS'te Homebrew Python kullanıyorsanız gerekirse `brew install python-tk` kurun).
   2. **Harici Python paketi gerekmez** (`pip install` yapmanıza **gerek yoktur**).
   3. **WinRAR veya 7-Zip gerekmez** — `.zip` paketleme ve açma işlemleri Python'ın dahili `zipfile` modülü ile yapılır.
-  4. **Windows İşletim Sistemi** (sıfırlama/içe aktarma öncesinde açık ajanları algılayıp kapatmak için Windows'un dahili `tasklist` ve `taskkill` komutlarını kullanır).
+  4. **Windows ve macOS Desteği** (Windows'ta `tasklist`/`taskkill`, macOS'te `ps`/`SIGTERM` ve `~/Library/Application Support/` yollarını otomatik kullanır).
 
 ### Nasıl Kurulur?
-* **Seçenek 1 — Taşınabilir EXE (Önerilen, Python Kurulumu Gerekmez):**
+* **Seçenek 1 — Taşınabilir EXE (Windows, Önerilen, Python Gerektirmez):**
   Projeyi (veya `AntigravityManager.exe` dosyasını) indirin ve **`AntigravityManager.exe`** dosyasına çift tıklayın (**`AntigravityManager.bat`** da varsa otomatik olarak `.exe`'yi başlatır).
-* **Seçenek 2 — Python Kaynak Kodundan Çalıştırma:**
+* **Seçenek 2 — Taşınabilir macOS Uygulaması (`AntigravityManager.app` / `AntigravityManager.command`):**
+  - **Bağımsız `.app`:** GitHub **Actions** (`Build Portable macOS App`) çıktısından `AntigravityManager-macOS-portable.zip` dosyasını indirin veya bir Mac'te şu komutla üretin:
+    ```bash
+    pip3 install pyinstaller
+    pyinstaller --windowed --onedir --name "AntigravityManager" antigravity_manager.py
+    ```
+    *(İmzasız `.app` ilk açılışta Gatekeeper uyarısı verirse Sağ Tık → **Aç** yapın veya `xattr -cr AntigravityManager.app` çalıştırın.)*
+  - **Başlatıcı Script:** Veya klasörü Mac'e kopyalayıp bir kez `chmod +x AntigravityManager.command` çalıştırdıktan sonra **`AntigravityManager.command`** dosyasına çift tıklayın.
+* **Seçenek 3 — Python Kaynak Kodundan Çalıştırma:**
   1. **`AntigravityManager.bat`** dosyasına çift tıklayın. Python veya Tkinter eksikse başlatıcı `winget` üzerinden Python 3.12'yi (Tkinter dahil) otomatik kurmayı teklif eder.
   2. İsterseniz [python.org/downloads](https://www.python.org/downloads/) üzerinden manuel kurabilir (kurulumda **"Add python.exe to PATH"** ve **"tcl/tk and IDLE"** kutucuklarını işaretleyin) veya terminalden kurabilirsiniz:
      ```powershell
