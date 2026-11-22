@@ -1,4 +1,4 @@
-# ⚡ AI Conversation Mover-Eraser
+# ⚡ AI Conversation Mover-Cleaner
 ### Antigravity • Claude Code • OpenAI Codex
 
 <p align="center">
